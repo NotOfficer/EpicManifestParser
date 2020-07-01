@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30204.135
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EpicManifestParser", "EpicManifestParser\EpicManifestParser.csproj", "{B535AB6C-8587-4909-A25D-2933B374A540}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EpicManifestParser.Test", "EpicManifestParser.Test\EpicManifestParser.Test.csproj", "{5D5B3332-61E4-4767-8AC8-93E4A8FF2BE4}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B535AB6C-8587-4909-A25D-2933B374A540}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B535AB6C-8587-4909-A25D-2933B374A540}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B535AB6C-8587-4909-A25D-2933B374A540}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B535AB6C-8587-4909-A25D-2933B374A540}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5D5B3332-61E4-4767-8AC8-93E4A8FF2BE4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5D5B3332-61E4-4767-8AC8-93E4A8FF2BE4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5D5B3332-61E4-4767-8AC8-93E4A8FF2BE4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5D5B3332-61E4-4767-8AC8-93E4A8FF2BE4}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {26B37486-4454-4B87-809E-BC18BB7F572F}
+	EndGlobalSection
+EndGlobal
