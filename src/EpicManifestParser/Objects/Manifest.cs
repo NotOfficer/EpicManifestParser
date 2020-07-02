@@ -26,7 +26,7 @@ namespace EpicManifestParser.Objects
 		public Dictionary<string, string> ChunkShas { get; }
 		public Dictionary<string, byte> DataGroups { get; }
 		public Dictionary<string, long> ChunkFilesizes { get; }
-		//public Dictionary<string, object> CustomFields { get; }
+		public Dictionary<string, string> CustomFields { get; }
 		public TimeSpan ParseTime { get; }
 
 		public Manifest(byte[] data)
@@ -228,6 +228,27 @@ namespace EpicManifestParser.Objects
 							reader.Read();
 							var size = Utilities.StringBlobTo<long>(reader.ValueSpan);
 							ChunkFilesizes.Add(guid, size);
+						}
+
+						break;
+					}
+					case "CustomFields":
+					{
+						reader.Read();
+
+						if (reader.TokenType != JsonTokenType.StartObject)
+						{
+							break;
+						}
+
+						CustomFields = new Dictionary<string, string>();
+
+						while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
+						{
+							var key = reader.GetString();
+							reader.Read();
+							var value = reader.GetString();
+							CustomFields.Add(key, value);
 						}
 
 						break;
