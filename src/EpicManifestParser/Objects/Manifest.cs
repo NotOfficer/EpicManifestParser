@@ -41,7 +41,7 @@ namespace EpicManifestParser.Objects
 					continue;
 				}
 
-				switch (reader.GetPString())
+				switch (reader.GetString())
 				{
 					case "ManifestFileVersion":
 					{
@@ -64,13 +64,13 @@ namespace EpicManifestParser.Objects
 					case "AppNameString":
 					{
 						reader.Read();
-						AppName = reader.GetPString();
+						AppName = reader.GetString();
 						break;
 					}
 					case "BuildVersionString":
 					{
 						reader.Read();
-						BuildVersion = reader.GetPString();
+						BuildVersion = reader.GetString();
 
 						var buildMatch = Regex.Match(BuildVersion, @"(\d+(?:\.\d+)+)-CL-(\d+)", RegexOptions.Singleline);
 
@@ -85,13 +85,13 @@ namespace EpicManifestParser.Objects
 					case "LaunchExeString":
 					{
 						reader.Read();
-						LaunchExe = reader.GetPString();
+						LaunchExe = reader.GetString();
 						break;
 					}
 					case "LaunchCommand":
 					{
 						reader.Read();
-						LaunchCommand = reader.GetPString();
+						LaunchCommand = reader.GetString();
 						break;
 					}
 					case "PrereqIds":
@@ -107,7 +107,7 @@ namespace EpicManifestParser.Objects
 
 						while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
 						{
-							PrereqIds.Add(reader.GetPString());
+							PrereqIds.Add(reader.GetString());
 						}
 
 						break;
@@ -115,19 +115,19 @@ namespace EpicManifestParser.Objects
 					case "PrereqName":
 					{
 						reader.Read();
-						PrereqName = reader.GetPString();
+						PrereqName = reader.GetString();
 						break;
 					}
 					case "PrereqPath":
 					{
 						reader.Read();
-						PrereqPath = reader.GetPString();
+						PrereqPath = reader.GetString();
 						break;
 					}
 					case "PrereqArgs":
 					{
 						reader.Read();
-						PrereqArgs = reader.GetPString();
+						PrereqArgs = reader.GetString();
 						break;
 					}
 					case "FileManifestList":
@@ -161,7 +161,7 @@ namespace EpicManifestParser.Objects
 
 						while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
 						{
-							var guid = reader.GetPString();
+							var guid = reader.GetString();
 							reader.Read();
 							var hash = Utilities.StringBlobToHexString(reader.ValueSpan);
 							ChunkHashes.Add(guid, hash);
@@ -182,9 +182,9 @@ namespace EpicManifestParser.Objects
 
 						while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
 						{
-							var guid = reader.GetPString();
+							var guid = reader.GetString();
 							reader.Read();
-							var sha = reader.GetPString();
+							var sha = reader.GetString();
 							ChunkShas.Add(guid, sha);
 						}
 
@@ -203,7 +203,7 @@ namespace EpicManifestParser.Objects
 
 						while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
 						{
-							var guid = reader.GetPString();
+							var guid = reader.GetString();
 							reader.Read();
 							var b = Utilities.GetByte(reader.ValueSpan);
 							DataGroups.Add(guid, b);
@@ -224,7 +224,7 @@ namespace EpicManifestParser.Objects
 
 						while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
 						{
-							var guid = reader.GetPString();
+							var guid = reader.GetString();
 							reader.Read();
 							var size = Utilities.StringBlobTo<long>(reader.ValueSpan);
 							ChunkFilesizes.Add(guid, size);

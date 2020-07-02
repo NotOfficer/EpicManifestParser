@@ -1,72 +1,50 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Text;
-using System.Text.Json;
 
 namespace EpicManifestParser
 {
 	internal static unsafe class Utilities
 	{
-		public static readonly ASCIIEncoding _encoding = new ASCIIEncoding();
 		private const byte _zeroChar = (byte)'0';
 
-		public static string GetPString(this ref Utf8JsonReader reader)
+		public static T StringBlobTo<T>(ReadOnlySpan<byte> stringBlob) where T : unmanaged
 		{
-			var span = reader.ValueSpan;
+			var bpBuffer = stackalloc byte[sizeof(T)];
+			var pBuffer = bpBuffer;
 
-			if (span.IsEmpty)
+			fixed (byte* bpBlob = &stringBlob.GetPinnableReference())
 			{
-				return string.Empty;
-			}
+				var pBlob = bpBlob;
 
-			fixed (byte* p = &span.GetPinnableReference())
-			{
-				return _encoding.GetString(p, span.Length);
-			}
-		}
-
-		public static T StringBlobTo<T>(ReadOnlySpan<byte> hash) where T : unmanaged
-		{
-			var buffer = stackalloc byte[sizeof(T)];
-			var pBuffer = buffer;
-
-			fixed (byte* p = &hash.GetPinnableReference())
-			{
-				var pBytes = p;
-
-				for (var i = 0; i < hash.Length; i += 3)
+				for (var i = 0; i < stringBlob.Length; i += 3)
 				{
-					var c1 = *pBytes++ - _zeroChar;
-					var c2 = *pBytes++ - _zeroChar;
-					var c3 = *pBytes++ - _zeroChar;
-
-					var b = (byte)(c1 * 100 + c2 * 10 + c3);
-					*pBuffer++ = b;
+					var b1 = *pBlob++ - _zeroChar;
+					var b2 = *pBlob++ - _zeroChar;
+					var b3 = *pBlob++ - _zeroChar;
+					*pBuffer++ = (byte)(b1 * 100 + b2 * 10 + b3);
 				}
 			}
 
-			return *(T*)buffer;
+			return *(T*)bpBuffer;
 		}
 
 		public static string StringBlobToHexString(ReadOnlySpan<byte> stringBlob)
 		{
 			var length = stringBlob.Length / 3;
-			var buffer = stackalloc byte[length];
-			var pBuffer = buffer;
+			var bpBuffer = stackalloc byte[length];
+			var pBuffer = bpBuffer;
 
-			fixed (byte* p = &stringBlob.GetPinnableReference())
+			fixed (byte* bpBlob = &stringBlob.GetPinnableReference())
 			{
-				var pBytes = p;
+				var pBlob = bpBlob;
 
 				for (var i = 0; i < stringBlob.Length; i += 3)
 				{
-					var c1 = *pBytes++ - _zeroChar;
-					var c2 = *pBytes++ - _zeroChar;
-					var c3 = *pBytes++ - _zeroChar;
-
-					var b = (byte)(c1 * 100 + c2 * 10 + c3);
-					*pBuffer++ = b;
+					var b1 = *pBlob++ - _zeroChar;
+					var b2 = *pBlob++ - _zeroChar;
+					var b3 = *pBlob++ - _zeroChar;
+					*pBuffer++ = (byte)(b1 * 100 + b2 * 10 + b3);
 				}
 			}
 
@@ -79,7 +57,7 @@ namespace EpicManifestParser
 
 				for (var i = 0; i < length; i++)
 				{
-					resultP2[i] = lookupP[buffer[i]];
+					resultP2[i] = lookupP[bpBuffer[i]];
 				}
 			}
 
@@ -89,12 +67,11 @@ namespace EpicManifestParser
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static byte GetByte(ReadOnlySpan<byte> stringBlob)
 		{
-			fixed (byte* p = &stringBlob.GetPinnableReference())
+			fixed (byte* pBlob = &stringBlob.GetPinnableReference())
 			{
-				var pBytes = p;
-				var b1 = *pBytes++ - _zeroChar;
-				var b2 = *pBytes++ - _zeroChar;
-				var b3 = *pBytes - _zeroChar;
+				var b1 = pBlob[0] - _zeroChar;
+				var b2 = pBlob[1] - _zeroChar;
+				var b3 = pBlob[2] - _zeroChar;
 
 				return (byte)(b1 * 100 + b2 * 10 + b3);
 			}

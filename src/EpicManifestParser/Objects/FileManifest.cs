@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text.Json;
 
 namespace EpicManifestParser.Objects
@@ -29,12 +30,12 @@ namespace EpicManifestParser.Objects
 					continue;
 				}
 
-				switch (reader.GetPString())
+				switch (reader.GetString())
 				{
 					case "Filename":
 					{
 						reader.Read();
-						Name = reader.GetPString();
+						Name = reader.GetString();
 						break;
 					}
 					case "FileHash":
@@ -74,7 +75,7 @@ namespace EpicManifestParser.Objects
 
 						while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
 						{
-							InstallTags.Add(reader.GetPString());
+							InstallTags.Add(reader.GetString());
 						}
 
 						break;

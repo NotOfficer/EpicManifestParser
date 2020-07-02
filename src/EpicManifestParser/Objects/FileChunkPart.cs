@@ -25,12 +25,12 @@ namespace EpicManifestParser.Objects
 					continue;
 				}
 
-				switch (reader.GetPString())
+				switch (reader.GetString())
 				{
 					case "Guid":
 					{
 						reader.Read();
-						Guid = reader.GetPString();
+						Guid = reader.GetString();
 						break;
 					}
 					case "Size":
