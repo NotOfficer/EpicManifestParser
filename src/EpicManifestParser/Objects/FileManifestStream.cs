@@ -93,9 +93,9 @@ namespace EpicManifestParser.Objects
 			await using var chunkStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
 
 			using var reader = new BinaryReader(chunkStream);
-			chunkStream.Position = 8;
+			chunkStream.Position = 8L;
 			var headerSize = reader.ReadInt32();
-			chunkStream.Position = 40;
+			chunkStream.Position = 40L;
 			var isCompressed = reader.ReadByte() == 1;
 			chunkStream.Position = headerSize;
 

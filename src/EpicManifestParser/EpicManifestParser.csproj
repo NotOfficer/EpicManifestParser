@@ -6,7 +6,7 @@
     <Company />
     <Product />
     <Description>A parser for EpicGames manifests.</Description>
-    <Copyright>Copyright (c) 2020 Not0fficer</Copyright>
+    <Copyright>Copyright (c) 2020 NotOfficer</Copyright>
     <RepositoryType>git</RepositoryType>
     <PackageTags>manifest parser, epicgames manifest</PackageTags>
     <PackageProjectUrl>https://github.com/NotOfficer/EpicManifestParser</PackageProjectUrl>
