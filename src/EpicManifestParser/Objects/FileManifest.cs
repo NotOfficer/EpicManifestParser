@@ -1,18 +1,21 @@
 ﻿using System.Collections.Generic;
-using System.Diagnostics;
+using System.IO;
+using System.Resources;
 using System.Text.Json;
 
 namespace EpicManifestParser.Objects
 {
 	public readonly struct FileManifest
 	{
+		private readonly Manifest _manifest;
 		public string Name { get; }
 		public string Hash { get; }
 		public List<FileChunkPart> ChunkParts { get; }
 		public List<string> InstallTags { get; }
 
-		internal FileManifest(ref Utf8JsonReader reader)
+		internal FileManifest(ref Utf8JsonReader reader, Manifest manifest)
 		{
+			_manifest = manifest;
 			Name = Hash = null;
 			ChunkParts = null;
 			InstallTags = null;
@@ -87,6 +90,16 @@ namespace EpicManifestParser.Objects
 		public override string ToString()
 		{
 			return Name;
+		}
+
+		public Stream GetStream()
+		{
+			if (_manifest.Options.ChunkBaseUri == null)
+			{
+				throw new MissingManifestResourceException("missing ChunkBaseUri");
+			}
+
+			return new FileManifestStream(this, _manifest);
 		}
 	}
 }

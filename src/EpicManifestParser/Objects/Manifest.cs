@@ -27,11 +27,22 @@ namespace EpicManifestParser.Objects
 		public Dictionary<string, byte> DataGroups { get; }
 		public Dictionary<string, long> ChunkFilesizes { get; }
 		public Dictionary<string, string> CustomFields { get; }
+		public Dictionary<string, FileChunk> Chunks { get; }
 		public TimeSpan ParseTime { get; }
 
-		public Manifest(byte[] data)
+		internal ManifestOptions Options { get; }
+
+		public Manifest(byte[] data, ManifestOptions options = null)
 		{
+			Options = options ??= new ManifestOptions();
+
+			if (options.ChunkCacheDirectory != null && !options.ChunkCacheDirectory.Exists)
+			{
+				options.ChunkCacheDirectory.Create();
+			}
+
 			var sw = Stopwatch.StartNew();
+
 			var reader = new Utf8JsonReader(data, true, new JsonReaderState());
 
 			while (reader.Read())
@@ -143,7 +154,7 @@ namespace EpicManifestParser.Objects
 
 						while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
 						{
-							FileManifests.Add(new FileManifest(ref reader));
+							FileManifests.Add(new FileManifest(ref reader, this));
 						}
 
 						break;
@@ -163,7 +174,7 @@ namespace EpicManifestParser.Objects
 						{
 							var guid = reader.GetString();
 							reader.Read();
-							var hash = Utilities.StringBlobToHexString(reader.ValueSpan);
+							var hash = Utilities.StringBlobToHexString(reader.ValueSpan, true);
 							ChunkHashes.Add(guid, hash);
 						}
 
@@ -254,6 +265,14 @@ namespace EpicManifestParser.Objects
 						break;
 					}
 				}
+			}
+
+			Chunks = new Dictionary<string, FileChunk>(ChunkFilesizes.Count);
+
+			foreach (var (guid, size) in ChunkFilesizes)
+			{
+				var chunk = new FileChunk(guid, size, ChunkHashes[guid], ChunkShas[guid], DataGroups[guid], options.ChunkBaseUri);
+				Chunks.Add(guid, chunk);
 			}
 
 			sw.Stop();

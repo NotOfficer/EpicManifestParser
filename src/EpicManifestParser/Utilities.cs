@@ -13,15 +13,15 @@ namespace EpicManifestParser
 			var bpBuffer = stackalloc byte[sizeof(T)];
 			var pBuffer = bpBuffer;
 
-			fixed (byte* bpBlob = &stringBlob.GetPinnableReference())
+			fixed (byte* bBlob = &stringBlob.GetPinnableReference())
 			{
-				var pBlob = bpBlob;
+				var i = 0;
 
-				for (var i = 0; i < stringBlob.Length; i += 3)
+				while (i < stringBlob.Length)
 				{
-					var b1 = *pBlob++ - _zeroChar;
-					var b2 = *pBlob++ - _zeroChar;
-					var b3 = *pBlob++ - _zeroChar;
+					var b1 = bBlob[i++] - _zeroChar;
+					var b2 = bBlob[i++] - _zeroChar;
+					var b3 = bBlob[i++] - _zeroChar;
 					*pBuffer++ = (byte)(b1 * 100 + b2 * 10 + b3);
 				}
 			}
@@ -29,22 +29,37 @@ namespace EpicManifestParser
 			return *(T*)bpBuffer;
 		}
 
-		public static string StringBlobToHexString(ReadOnlySpan<byte> stringBlob)
+		public static string StringBlobToHexString(ReadOnlySpan<byte> stringBlob, bool reversed = false)
 		{
 			var length = stringBlob.Length / 3;
 			var bpBuffer = stackalloc byte[length];
 			var pBuffer = bpBuffer;
 
-			fixed (byte* bpBlob = &stringBlob.GetPinnableReference())
+			fixed (byte* bBlob = &stringBlob.GetPinnableReference())
 			{
-				var pBlob = bpBlob;
-
-				for (var i = 0; i < stringBlob.Length; i += 3)
+				if (reversed)
 				{
-					var b1 = *pBlob++ - _zeroChar;
-					var b2 = *pBlob++ - _zeroChar;
-					var b3 = *pBlob++ - _zeroChar;
-					*pBuffer++ = (byte)(b1 * 100 + b2 * 10 + b3);
+					var i = stringBlob.Length - 1;
+
+					while (i > 0)
+					{
+						var b3 = bBlob[i--] - _zeroChar;
+						var b2 = bBlob[i--] - _zeroChar;
+						var b1 = bBlob[i--] - _zeroChar;
+						*pBuffer++ = (byte)(b1 * 100 + b2 * 10 + b3);
+					}
+				}
+				else
+				{
+					var i = 0;
+
+					while (i < stringBlob.Length)
+					{
+						var b1 = bBlob[i++] - _zeroChar;
+						var b2 = bBlob[i++] - _zeroChar;
+						var b3 = bBlob[i++] - _zeroChar;
+						*pBuffer++ = (byte)(b1 * 100 + b2 * 10 + b3);
+					}
 				}
 			}
 
