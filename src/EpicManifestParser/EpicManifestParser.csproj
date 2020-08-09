@@ -8,16 +8,17 @@
     <Description>A parser for EpicGames manifests.</Description>
     <Copyright>Copyright (c) 2020 NotOfficer</Copyright>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>manifest parser, epicgames manifest</PackageTags>
+    <PackageTags>manifest parser, epicgames manifest parser</PackageTags>
     <PackageProjectUrl>https://github.com/NotOfficer/EpicManifestParser</PackageProjectUrl>
     <RepositoryUrl>https://github.com/NotOfficer/EpicManifestParser</RepositoryUrl>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageIcon>icon.png</PackageIcon>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <AssemblyVersion>1.1.0.0</AssemblyVersion>
-    <FileVersion>1.1.0.0</FileVersion>
-    <Version>1.1.0</Version>
+    <AssemblyVersion>1.2.0.0</AssemblyVersion>
+    <FileVersion>1.2.0.0</FileVersion>
+    <Version>1.2.0</Version>
+    <PackageReleaseNotes></PackageReleaseNotes>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
