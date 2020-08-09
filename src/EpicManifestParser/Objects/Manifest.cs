@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -277,6 +278,32 @@ namespace EpicManifestParser.Objects
 
 			sw.Stop();
 			ParseTime = sw.Elapsed;
+		}
+
+		public (int Count, long Size) DeleteUnusedChunks()
+		{
+			if (Options.ChunkCacheDirectory == null || !Options.ChunkCacheDirectory.Exists)
+			{
+				return default;
+			}
+
+			var chunkMap = Chunks.Values.Select(x => x.Filename).ToHashSet(StringComparer.OrdinalIgnoreCase);
+			var deletedCount = 0;
+			var deletedSize = 0L;
+
+			foreach (var chunk in Options.ChunkCacheDirectory.EnumerateFiles("*.chunk"))
+			{
+				if (chunkMap.Contains(chunk.Name))
+				{
+					continue;
+				}
+
+				chunk.Delete();
+				deletedCount++;
+				deletedSize += chunk.Length;
+			}
+
+			return (deletedCount, deletedSize);
 		}
 	}
 }
