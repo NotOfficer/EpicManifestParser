@@ -5,21 +5,24 @@ using System.Text.Json;
 
 namespace EpicManifestParser.Objects
 {
-	public readonly struct FileManifest
+	public class FileManifest
 	{
 		private readonly Manifest _manifest;
-		public string Name { get; }
-		public string Hash { get; }
-		public List<FileChunkPart> ChunkParts { get; }
-		public List<string> InstallTags { get; }
+		public string Name { get; set; }
+		public string Hash { get; set; }
+		public List<FileChunkPart> ChunkParts { get; set; }
+		public List<string> InstallTags { get; set; }
 
-		internal FileManifest(ref Utf8JsonReader reader, Manifest manifest)
+		internal FileManifest(Manifest manifest)
 		{
 			_manifest = manifest;
 			Name = Hash = null;
 			ChunkParts = null;
 			InstallTags = null;
+		}
 
+		internal FileManifest(ref Utf8JsonReader reader, Manifest manifest) : this(manifest)
+		{
 			if (reader.TokenType != JsonTokenType.StartObject)
 			{
 				return;
@@ -57,7 +60,6 @@ namespace EpicManifestParser.Objects
 						}
 
 						ChunkParts = new List<FileChunkPart>();
-
 						while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
 						{
 							ChunkParts.Add(new FileChunkPart(ref reader));
@@ -75,7 +77,6 @@ namespace EpicManifestParser.Objects
 						}
 
 						InstallTags = new List<string>(1); // wasn't ever bigger than 1 ¯\_(ツ)_/¯
-
 						while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
 						{
 							InstallTags.Add(reader.GetString());

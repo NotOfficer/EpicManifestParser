@@ -1,4 +1,6 @@
-﻿using System.Text.Json;
+﻿using System;
+using System.Text.Json;
+using GenericReader;
 
 namespace EpicManifestParser.Objects
 {
@@ -47,6 +49,19 @@ namespace EpicManifestParser.Objects
 					}
 				}
 			}
+		}
+
+		internal FileChunkPart(ref GenericBufferReader reader)
+		{
+			reader.Position += 4;
+			var hex = reader.ReadBytes(16);
+			Array.Reverse(hex, 0, 4);
+			Array.Reverse(hex, 4, 4);
+			Array.Reverse(hex, 8, 4);
+			Array.Reverse(hex, 12, 4);
+			Guid = BitConverter.ToString(hex).Replace("-", "");
+			Offset = reader.Read<int>();
+			Size = reader.Read<int>();
 		}
 
 		public override string ToString()
