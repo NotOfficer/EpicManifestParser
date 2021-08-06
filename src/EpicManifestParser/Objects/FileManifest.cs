@@ -8,15 +8,16 @@ namespace EpicManifestParser.Objects
 	public class FileManifest
 	{
 		private readonly Manifest _manifest;
-		public string Name { get; set; }
-		public string Hash { get; set; }
-		public List<FileChunkPart> ChunkParts { get; set; }
-		public List<string> InstallTags { get; set; }
+		public string Name { get; }
+		public string Hash { get; internal set; }
+		public List<FileChunkPart> ChunkParts { get; internal set; }
+		public List<string> InstallTags { get; internal set; }
 
-		internal FileManifest(Manifest manifest)
+		internal FileManifest(Manifest manifest, string name = null)
 		{
 			_manifest = manifest;
-			Name = Hash = null;
+			Name = name;
+			Hash = null;
 			ChunkParts = null;
 			InstallTags = null;
 		}

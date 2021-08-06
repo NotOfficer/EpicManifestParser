@@ -2,7 +2,7 @@
 
 namespace EpicManifestParser.Objects
 {
-	public readonly struct FileChunk
+	public class FileChunk
 	{
 		public string Guid { get; }
 		public long Size { get; }

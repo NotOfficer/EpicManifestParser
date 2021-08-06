@@ -18,8 +18,8 @@ namespace EpicManifestParser.Objects
 		public int AppId { get; private set; }
 		public string AppName { get; private set; }
 		public string BuildVersion { get; private set; }
-		public Version Version { get; private set; }
-		public int CL { get; private set; }
+		public Version Version { get; }
+		public int CL { get; }
 		public string LaunchExe { get; private set; }
 		public string LaunchCommand { get; private set; }
 		public List<string> PrereqIds { get; private set; }
@@ -329,7 +329,7 @@ namespace EpicManifestParser.Objects
 				case EManifestStorageFlags.Compressed:
 				{
 					var compressed = reader.ReadBytes(dataSizeCompressed);
-					using var compressedStream = new MemoryStream(compressed) {Position = 0};
+					using var compressedStream = new MemoryStream(compressed);
 					using var zlib = new ZlibStream(compressedStream, CompressionMode.Decompress);
 					zlib.Read(data, 0, dataSizeUncompressed);
 					break;
@@ -364,7 +364,7 @@ namespace EpicManifestParser.Objects
 				BuildVersion = manifest.ReadFString();
 				LaunchExe = manifest.ReadFString();
 				LaunchCommand = manifest.ReadFString();
-				PrereqIds = manifest.ReadArray(() => manifest.ReadFString()).ToList();
+				PrereqIds = manifest.ReadFStringArray().ToList();
 				PrereqName = manifest.ReadFString();
 				PrereqPath = manifest.ReadFString();
 				PrereqArgs = manifest.ReadFString();
@@ -380,47 +380,48 @@ namespace EpicManifestParser.Objects
 			if (dataVersion >= EManifestMetaVersion.Original)
 			{
 				var count = manifest.Read<int>();
+				var guids = new List<string>(count);
 				ChunkFilesizes = new Dictionary<string, long>(count);
 				ChunkHashes = new Dictionary<string, string>(count);
 				ChunkShas = new Dictionary<string, string>(count);
 				DataGroups = new Dictionary<string, byte>(count);
 
+				var guidValues = manifest.ReadArray<uint>(count * 4);
 				for (var i = 0; i < count; i++) // Guid
 				{
-					var hex = manifest.ReadBytes(16);
-					Array.Reverse(hex, 0, 4);
-					Array.Reverse(hex, 4, 4);
-					Array.Reverse(hex, 8, 4);
-					Array.Reverse(hex, 12, 4);
-					var guid = BitConverter.ToString(hex).Replace("-", "");
-					ChunkFilesizes.Add(guid, 0);
-					ChunkHashes.Add(guid, string.Empty);
-					ChunkShas.Add(guid, string.Empty);
-					DataGroups.Add(guid, 0x00);
+					var position = i * 4;
+					var guid = $"{guidValues[position]:X8}{guidValues[position + 1]:X8}{guidValues[position + 2]:X8}{guidValues[position + 3]:X8}";
+					guids.Add(guid);
 				}
 
-				foreach (var key in ChunkHashes.Keys.ToList()) // Hash
+				var hashes = manifest.ReadArray<ulong>(count);
+				for (var i = 0; i < count; i++) // Hash
 				{
-					var hex = manifest.ReadBytes(8);
-					Array.Reverse(hex);
-					ChunkHashes[key] = BitConverter.ToString(hex).Replace("-", "");
+					var guid = guids[i];
+					ChunkHashes[guid] = hashes[i].ToString("X16");
 				}
 
-				foreach (var key in ChunkShas.Keys.ToList()) // ShaHash
+				var shaHashesBuffer = manifest.ReadBytes(count * 20);
+				for (var i = 0; i < count; i++) // ShaHash
 				{
-					ChunkShas[key] = BitConverter.ToString(manifest.ReadBytes(20)).Replace("-", "");
+					var guid = guids[i];
+					ChunkShas[guid] = BitConverter.ToString(shaHashesBuffer, i * 20, 20).Replace("-", "");
 				}
 
-				foreach (var key in DataGroups.Keys.ToList()) // GroupNumber
+				var groupNumbers = manifest.ReadBytes(count);
+				for (var i = 0; i < count; i++)
 				{
-					DataGroups[key] = manifest.ReadByte();
+					var guid = guids[i];
+					DataGroups[guid] = groupNumbers[i];
 				}
 
 				manifest.Position += count * 4; // WindowSize
 
-				foreach (var key in ChunkFilesizes.Keys.ToList()) // FileSize
+				var fileSizes = manifest.ReadArray<long>(count);
+				for (var i = 0; i < count; i++) // FileSize
 				{
-					ChunkFilesizes[key] = manifest.Read<long>();
+					var guid = guids[i];
+					ChunkFilesizes[guid] = fileSizes[i];
 				}
 			}
 
@@ -436,7 +437,7 @@ namespace EpicManifestParser.Objects
 				for (var i = 0; i < count; i++) // Filename
 				{
 					var filename = manifest.ReadFString();
-					FileManifests.Add(new FileManifest(this) { Name = filename });
+					FileManifests.Add(new FileManifest(this, filename));
 				}
 
 				for (var i = 0; i < count; i++) // SymlinkTarget
@@ -444,21 +445,23 @@ namespace EpicManifestParser.Objects
 					manifest.ReadFString();
 				}
 
-				foreach (var file in FileManifests) // FileHash
+				var shaHashesBuffer = manifest.ReadBytes(count * 20);
+				for (var i = 0; i < count; i++) // FileHash
 				{
-					file.Hash = BitConverter.ToString(manifest.ReadBytes(20)).Replace("-", "");
+					var file = FileManifests[i];
+					file.Hash = BitConverter.ToString(shaHashesBuffer, i * 20, 20).Replace("-", "");
 				}
 
 				manifest.Position += count; // FileList
 
 				foreach (var file in FileManifests) // InstallTags
 				{
-					file.InstallTags = manifest.ReadArray(() => manifest.ReadFString()).ToList();
+					file.InstallTags = manifest.ReadFStringArray().ToList();
 				}
 
 				foreach (var file in FileManifests) // ChunkParts
 				{
-					file.ChunkParts = manifest.ReadArray(() => new FileChunkPart(ref manifest)).ToList();
+					file.ChunkParts = manifest.ReadArray(() => new FileChunkPart(manifest)).ToList();
 				}
 			}
 
@@ -470,15 +473,12 @@ namespace EpicManifestParser.Objects
 			{
 				var count = manifest.Read<int>();
 				CustomFields = new Dictionary<string, string>(count);
+				var keys = manifest.ReadFStringArray(count);
+				var values = manifest.ReadFStringArray(count);
 
 				for (var i = 0; i < count; i++)
 				{
-					CustomFields.Add(manifest.ReadFString(), string.Empty);
-				}
-
-				foreach (var key in CustomFields.Keys.ToList())
-				{
-					CustomFields[key] = manifest.ReadFString();
+					CustomFields.Add(keys[i], values[i]);
 				}
 			}
 		}

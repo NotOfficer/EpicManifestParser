@@ -4,7 +4,7 @@ using GenericReader;
 
 namespace EpicManifestParser.Objects
 {
-	public readonly struct FileChunkPart
+	public class FileChunkPart
 	{
 		public string Guid { get; }
 		public int Size { get; }
@@ -51,15 +51,15 @@ namespace EpicManifestParser.Objects
 			}
 		}
 
-		internal FileChunkPart(ref GenericBufferReader reader)
+		internal FileChunkPart(IGenericReader reader)
 		{
 			reader.Position += 4;
 			var hex = reader.ReadBytes(16);
-			Array.Reverse(hex, 0, 4);
-			Array.Reverse(hex, 4, 4);
-			Array.Reverse(hex, 8, 4);
-			Array.Reverse(hex, 12, 4);
-			Guid = BitConverter.ToString(hex).Replace("-", "");
+			var guidA = BitConverter.ToUInt32(hex, 00);
+			var guidB = BitConverter.ToUInt32(hex, 04);
+			var guidC = BitConverter.ToUInt32(hex, 08);
+			var guidD = BitConverter.ToUInt32(hex, 12);
+			Guid = $"{guidA:X8}{guidB:X8}{guidC:X8}{guidD:X8}";
 			Offset = reader.Read<int>();
 			Size = reader.Read<int>();
 		}
