@@ -29,9 +29,15 @@ namespace EpicManifestParser.Test
 
 			var testPak = manfiest.FileManifests.Find(x => x.Name == "FortniteGame/Content/Paks/pakchunk1020-WindowsClient.pak");
 			await using var pakStream = testPak!.GetStream();
+
+			// save example
+			await using var pakMemoryStream = new MemoryStream((int)pakStream.Length);
+			await pakStream.SaveAsync(pakMemoryStream);
+
+			pakMemoryStream.Position = 0;
 			using var sha1 = SHA1.Create();
 			Console.WriteLine("Downloading 5.25 MB pak & computing hash...");
-			var hash = sha1.ComputeHash(pakStream);
+			var hash = sha1.ComputeHash(pakMemoryStream);
 			var hashString = BitConverter.ToString(hash).Replace("-", null);
 			Console.WriteLine("Result: {0} ({1} / {2})", testPak.Hash == hashString ? "match" : "different", hashString, testPak.Hash);
 
@@ -48,7 +54,7 @@ namespace EpicManifestParser.Test
 			}
 
 			var avg = time / runs;
-			Console.WriteLine($"Parsed {runs} Manifests in: {time.TotalMilliseconds:0}ms ({avg.TotalMilliseconds:0}ms avg)");
+			Console.WriteLine($"Parsed {runs} Manifests in: {time.TotalMilliseconds:0}ms ({avg.TotalMilliseconds:0}ms/manifest avg)");
 		}
 	}
 }

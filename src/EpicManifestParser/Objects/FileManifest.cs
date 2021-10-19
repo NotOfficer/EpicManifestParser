@@ -94,7 +94,7 @@ namespace EpicManifestParser.Objects
 			return Name;
 		}
 
-		public Stream GetStream()
+		public FileManifestStream GetStream()
 		{
 			if (_manifest.Options.ChunkBaseUri == null)
 			{

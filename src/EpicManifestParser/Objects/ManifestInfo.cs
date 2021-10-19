@@ -19,7 +19,7 @@ namespace EpicManifestParser.Objects
 		public int CL { get; }
 		public string Hash { get; }
 		public Uri Uri { get; }
-		public string Filename { get; }
+		public string FileName { get; }
 
 		public ManifestInfo(Stream jsonStream) : this(JsonDocument.Parse(jsonStream)) { }
 		public ManifestInfo(byte[] jsonBytes) : this(JsonDocument.Parse(jsonBytes)) { }
@@ -71,12 +71,12 @@ namespace EpicManifestParser.Objects
 			}
 
 			Uri = (manifestUriBuilders.Find(x => x.Query.Length == 0) ?? manifestUriBuilders[0]).Uri;
-			Filename = Uri.Segments[^1];
+			FileName = Uri.Segments[^1];
 		}
 
 		public byte[] DownloadManifestData(string cacheDir = null)
 		{
-			var path = cacheDir == null ? null : Path.Combine(cacheDir, Filename);
+			var path = cacheDir == null ? null : Path.Combine(cacheDir, FileName);
 
 			if (path != null && File.Exists(path))
 			{
@@ -104,7 +104,7 @@ namespace EpicManifestParser.Objects
 
 		public async Task<byte[]> DownloadManifestDataAsync(string cacheDir = null)
 		{
-			var path = cacheDir == null ? null : Path.Combine(cacheDir, Filename);
+			var path = cacheDir == null ? null : Path.Combine(cacheDir, FileName);
 
 			if (path != null && File.Exists(path))
 			{

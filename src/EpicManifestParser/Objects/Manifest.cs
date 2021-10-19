@@ -323,11 +323,12 @@ namespace EpicManifestParser.Objects
 			var version = reader.Read<EFeatureLevel>();
 			reader.Seek(headerSize, SeekOrigin.Begin);
 
-			var data = new byte[dataSizeUncompressed];
+			byte[] data;
 			switch (storedAs)
 			{
 				case EManifestStorageFlags.Compressed:
 				{
+					data = new byte[dataSizeUncompressed];
 					var compressed = reader.ReadBytes(dataSizeCompressed);
 					using var compressedStream = new MemoryStream(compressed);
 					using var zlib = new ZlibStream(compressedStream, CompressionMode.Decompress);
@@ -401,19 +402,21 @@ namespace EpicManifestParser.Objects
 					ChunkHashes[guid] = hashes[i].ToString("X16");
 				}
 
-				var shaHashesBuffer = manifest.ReadBytes(count * 20);
+				var shaOffset = (int)manifest.Position;
 				for (var i = 0; i < count; i++) // ShaHash
 				{
 					var guid = guids[i];
-					ChunkShas[guid] = BitConverter.ToString(shaHashesBuffer, i * 20, 20).Replace("-", "");
+					ChunkShas[guid] = BitConverter.ToString(data, shaOffset + i * 20, 20).Replace("-", "");
 				}
+				manifest.Position += count * 20;
 
-				var groupNumbers = manifest.ReadBytes(count);
+				var groupNumbersOffset = (int)manifest.Position;
 				for (var i = 0; i < count; i++)
 				{
 					var guid = guids[i];
-					DataGroups[guid] = groupNumbers[i];
+					DataGroups[guid] = data[groupNumbersOffset + i];
 				}
+				manifest.Position += count;
 
 				manifest.Position += count * 4; // WindowSize
 
@@ -445,12 +448,13 @@ namespace EpicManifestParser.Objects
 					manifest.ReadFString();
 				}
 
-				var shaHashesBuffer = manifest.ReadBytes(count * 20);
+				var shaOffset = (int)manifest.Position;
 				for (var i = 0; i < count; i++) // FileHash
 				{
 					var file = FileManifests[i];
-					file.Hash = BitConverter.ToString(shaHashesBuffer, i * 20, 20).Replace("-", "");
+					file.Hash = BitConverter.ToString(data, shaOffset + i * 20, 20).Replace("-", "");
 				}
+				manifest.Position += count * 20;
 
 				manifest.Position += count; // FileList
 
