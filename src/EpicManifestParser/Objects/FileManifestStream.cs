@@ -1,4 +1,8 @@
-﻿using System;
+﻿using GenericReader;
+
+using Ionic.Zlib;
+
+using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
@@ -7,8 +11,6 @@ using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
-
-using Ionic.Zlib;
 
 namespace EpicManifestParser.Objects
 {
@@ -112,12 +114,14 @@ namespace EpicManifestParser.Objects
 			var chunkData = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
 #endif
 
-			var headerSize = Unsafe.ReadUnaligned<int>(ref chunkData[8]);
-			var isCompressed = chunkData[40] == 1;
-			var chunkDataSize = chunkData.Length - headerSize;
-
-			var compressedData = new byte[chunkDataSize];
-			Unsafe.CopyBlockUnaligned(ref compressedData[0], ref chunkData[headerSize], (uint)chunkDataSize);
+			using var reader = new GenericBufferReader(chunkData);
+			reader.Position = 8L;
+			var headerSize = reader.Read<int>();
+			reader.Position = 40L;
+			var isCompressed = reader.Read<bool>();
+			reader.Position = headerSize;
+			var chunkDataSize = (int)(reader.Size - reader.Position);
+			var compressedData = reader.ReadBytes(chunkDataSize);
 
 			var outData = isCompressed ? ZlibStream.UncompressBuffer(compressedData) : compressedData;
 			var outStream = new MemoryStream(outData, false);
