@@ -37,7 +37,7 @@ namespace EpicManifestParser.Test
 			pakMemoryStream.Position = 0;
 			using var sha1 = SHA1.Create();
 			Console.WriteLine("Downloading 5.25 MB pak & computing hash...");
-			var hash = sha1.ComputeHash(pakMemoryStream);
+			var hash = await sha1.ComputeHashAsync(pakMemoryStream);
 			var hashString = BitConverter.ToString(hash).Replace("-", null);
 			Console.WriteLine("Result: {0} ({1} / {2})", testPak.Hash == hashString ? "match" : "different", hashString, testPak.Hash);
 
