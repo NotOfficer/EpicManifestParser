@@ -56,7 +56,7 @@ namespace EpicManifestParser.Objects
 			get => _position;
 			set
 			{
-				if (value >= Length || value < 0)
+				if (value > Length || value < 0)
 				{
 					throw new ArgumentOutOfRangeException();
 				}
