@@ -32,6 +32,7 @@ public class FManifestMeta
 	public string UninstallExe { get; internal set; } = "";
 	public string UninstallCommand { get; internal set; } = "";
 
+	internal FManifestMeta() { }
 	internal FManifestMeta(GenericBufferReader reader)
 	{
 		var startPos = reader.Position;
