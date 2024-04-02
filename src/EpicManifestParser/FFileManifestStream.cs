@@ -1,9 +1,10 @@
 ﻿using System.Buffers;
-using System.IO.Compression;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 using EpicManifestParser.UE;
+
 using Microsoft.Win32.SafeHandles;
 
 namespace EpicManifestParser;
@@ -31,6 +32,8 @@ public class FFileManifestStream : Stream
 		}
 	}
 
+	public string FileName => _fileManifest.Filename;
+
 	internal FFileManifestStream(FFileManifest fileManifest)
 	{
 		if (string.IsNullOrEmpty(fileManifest.Manifest.Options.ChunkBaseUrl))
@@ -41,10 +44,58 @@ public class FFileManifestStream : Stream
 		_fileManifest = fileManifest;
 	}
 
+	private class DownloadState
+	{
+		public readonly byte[] DestinationBuffer;
+		public readonly SafeFileHandle DestinationHandle;
+		public readonly FBuildPatchAppManifest Manifest;
+
+		private readonly object? _userState;
+		private readonly Action<SaveProgressChangedEventArgs>? _callback;
+		private readonly long _totalBytesToSave;
+		private long _bytesSaved;
+
+		public DownloadState(SafeFileHandle destinationHandle, FBuildPatchAppManifest manifest, long totalBytesToSave, object? userState, Action<SaveProgressChangedEventArgs>? callback)
+		{
+			DestinationHandle = destinationHandle;
+			DestinationBuffer = null!;
+			Manifest = manifest;
+			_userState = userState;
+			_callback = callback;
+			_totalBytesToSave = totalBytesToSave;
+		}
+
+		public DownloadState(byte[] destinationBuffer, FBuildPatchAppManifest manifest, long totalBytesToSave, object? userState, Action<SaveProgressChangedEventArgs>? callback)
+		{
+			DestinationBuffer = destinationBuffer;
+			DestinationHandle = null!;
+			Manifest = manifest;
+			_userState = userState;
+			_callback = callback;
+			_totalBytesToSave = totalBytesToSave;
+		}
+
+		public void OnBytesWritten(long amount)
+		{
+			if (_callback is null)
+				return;
+
+			lock (Manifest)
+			{
+				_bytesSaved += amount;
+				var progress = (int)Math.Truncate((double)_bytesSaved / _totalBytesToSave * 100);
+				var eventArgs = new SaveProgressChangedEventArgs(progress, _userState, _bytesSaved, _totalBytesToSave);
+				_callback(eventArgs);
+			}
+		}
+	}
+
 	// TODO: make concurrent
-	public async Task SaveToAsync(Stream destination, CancellationToken cancellationToken = default)
+	public async Task SaveToAsync(Stream destination, Action<SaveProgressChangedEventArgs>? progressCallback,
+		object? userState = null, CancellationToken cancellationToken = default)
 	{
 		var poolBuffer = ArrayPool<byte>.Shared.Rent(_fileManifest.Manifest.Options.ChunkDownloadBufferSize);
+		var downloadState = new DownloadState((byte[])null!, _fileManifest.Manifest, Length, userState, progressCallback);
 
 		try
 		{
@@ -53,6 +104,7 @@ public class FFileManifestStream : Stream
 				var chunk = _fileManifest.Manifest.Chunks[fileChunkPart.Guid];
 				await chunk.ReadDataAsync(poolBuffer, _fileManifest.Manifest, cancellationToken).ConfigureAwait(false);
 				await destination.WriteAsync(new ReadOnlyMemory<byte>(poolBuffer, (int)fileChunkPart.Offset, (int)fileChunkPart.Size), cancellationToken).ConfigureAwait(false);
+				downloadState.OnBytesWritten(fileChunkPart.Size);
 			}
 		}
 		finally
@@ -63,27 +115,51 @@ public class FFileManifestStream : Stream
 		await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
 	}
 
-	public async Task SaveBytesAsync(byte[] destination, int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
+	public Task SaveToAsync(Stream destination, CancellationToken cancellationToken = default)
 	{
+		return SaveToAsync(destination, null, null, cancellationToken);
+	}
+
+	public async Task SaveBytesAsync(byte[] destination, Action<SaveProgressChangedEventArgs>? progressCallback,
+		object? userState = null, int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
+	{
+		var downloadState = new DownloadState(destination, _fileManifest.Manifest, Length, userState, progressCallback);
 		var parallelOptions = new ParallelOptions
 		{
 			MaxDegreeOfParallelism = maxDegreeOfParallelism,
 			CancellationToken = cancellationToken
 		};
-		await Parallel.ForEachAsync(EnumerateChunksWithOffset(destination), parallelOptions, async (tuple, token) =>
+		await Parallel.ForEachAsync(EnumerateChunksWithOffset(downloadState), parallelOptions, SaveAsync).ConfigureAwait(false);
+		return;
+
+		static async ValueTask SaveAsync((DownloadState State, FChunkInfo Chunk, uint ChunkPartOffset, uint ChunkPartSize, long Offset) tuple, CancellationToken token)
 		{
-			var poolBuffer = ArrayPool<byte>.Shared.Rent(tuple.Manifest.Options.ChunkDownloadBufferSize);
+			var poolBuffer = ArrayPool<byte>.Shared.Rent(tuple.State.Manifest.Options.ChunkDownloadBufferSize);
 
 			try
 			{
-				await tuple.Chunk.ReadDataAsync(poolBuffer, tuple.Manifest, token).ConfigureAwait(false);
-				Unsafe.CopyBlockUnaligned(ref tuple.Buffer[tuple.Offset], ref poolBuffer[tuple.ChunkPartOffset], tuple.ChunkPartSize);
+				await tuple.Chunk.ReadDataAsync(poolBuffer, tuple.State.Manifest, token).ConfigureAwait(false);
+				Unsafe.CopyBlockUnaligned(ref tuple.State.DestinationBuffer[tuple.Offset],
+					ref poolBuffer[tuple.ChunkPartOffset], tuple.ChunkPartSize);
+				tuple.State.OnBytesWritten(tuple.ChunkPartSize);
 			}
 			finally
 			{
 				ArrayPool<byte>.Shared.Return(poolBuffer);
 			}
-		}).ConfigureAwait(false);
+		}
+	}
+
+	public Task SaveBytesAsync(byte[] destination, int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
+	{
+		return SaveBytesAsync(destination, null, null, maxDegreeOfParallelism, cancellationToken);
+	}
+
+	public async Task<byte[]> SaveBytesAsync(Action<SaveProgressChangedEventArgs> progressCallback, object? userState = null, int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
+	{
+		var destination = new byte[Length];
+		await SaveBytesAsync(destination, progressCallback, userState, maxDegreeOfParallelism, cancellationToken).ConfigureAwait(false);
+		return destination;
 	}
 
 	public async Task<byte[]> SaveBytesAsync(int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
@@ -93,59 +169,55 @@ public class FFileManifestStream : Stream
 		return destination;
 	}
 
-	private IEnumerable<(FBuildPatchAppManifest Manifest, FChunkInfo Chunk, uint ChunkPartOffset, uint ChunkPartSize, byte[] Buffer, long Offset)>
-		EnumerateChunksWithOffset(byte[] buffer)
+	private IEnumerable<(DownloadState State, FChunkInfo Chunk, uint ChunkPartOffset, uint ChunkPartSize, long Offset)>
+		EnumerateChunksWithOffset(DownloadState state)
 	{
 		var offset = 0L;
 
 		foreach (var fileChunkPart in _fileManifest.ChunkParts)
 		{
 			var chunk = _fileManifest.Manifest.Chunks[fileChunkPart.Guid];
-			yield return (_fileManifest.Manifest, chunk, fileChunkPart.Offset, fileChunkPart.Size, buffer, offset);
+			yield return (state, chunk, fileChunkPart.Offset, fileChunkPart.Size, offset);
 			offset += fileChunkPart.Size;
 		}
 	}
 
-	public async Task SaveFileAsync(string path, int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
+	public async Task SaveFileAsync(string path, Action<SaveProgressChangedEventArgs>? progressCallback, object? userState = null, int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
 	{
 		using var destination = File.OpenHandle(path, FileMode.Create, FileAccess.ReadWrite, FileShare.None, FileOptions.Asynchronous, Length);
+		var downloadState = new DownloadState(destination, _fileManifest.Manifest, Length, userState, progressCallback);
 
 		var parallelOptions = new ParallelOptions
 		{
 			MaxDegreeOfParallelism = maxDegreeOfParallelism,
 			CancellationToken = cancellationToken
 		};
-		await Parallel.ForEachAsync(EnumerateChunksWithOffset(destination), parallelOptions, async (tuple, token) =>
+		await Parallel.ForEachAsync(EnumerateChunksWithOffset(downloadState), parallelOptions, SaveAsync).ConfigureAwait(false);
+
+		static async ValueTask SaveAsync((DownloadState State, FChunkInfo Chunk, uint ChunkPartOffset, uint ChunkPartSize, long Offset) tuple, CancellationToken token)
 		{
-			var poolBuffer = ArrayPool<byte>.Shared.Rent(tuple.Manifest.Options.ChunkDownloadBufferSize);
+			var poolBuffer = ArrayPool<byte>.Shared.Rent(tuple.State.Manifest.Options.ChunkDownloadBufferSize);
 
 			try
 			{
-				await tuple.Chunk.ReadDataAsync(poolBuffer, tuple.Manifest, token).ConfigureAwait(false);
-				await RandomAccess.WriteAsync(tuple.Handle
-					, new ReadOnlyMemory<byte>(poolBuffer, tuple.ChunkPartOffset, tuple.ChunkPartSize)
-					, tuple.Offset, cancellationToken).ConfigureAwait(false);
+				await tuple.Chunk.ReadDataAsync(poolBuffer, tuple.State.Manifest, token).ConfigureAwait(false);
+				await RandomAccess.WriteAsync(tuple.State.DestinationHandle,
+					new ReadOnlyMemory<byte>(poolBuffer, (int)tuple.ChunkPartOffset, (int)tuple.ChunkPartSize),
+					tuple.Offset, token).ConfigureAwait(false);
+				tuple.State.OnBytesWritten(tuple.ChunkPartSize);
 			}
 			finally
 			{
 				ArrayPool<byte>.Shared.Return(poolBuffer);
 			}
-		}).ConfigureAwait(false);
+		}
 
 		RandomAccess.FlushToDisk(destination);
 	}
 
-	private IEnumerable<(FBuildPatchAppManifest Manifest, FChunkInfo Chunk, int ChunkPartOffset, int ChunkPartSize, SafeFileHandle Handle, long Offset)>
-		EnumerateChunksWithOffset(SafeFileHandle handle)
+	public Task SaveFileAsync(string path, int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
 	{
-		var offset = 0L;
-
-		foreach (var fileChunkPart in _fileManifest.ChunkParts)
-		{
-			var chunk = _fileManifest.Manifest.Chunks[fileChunkPart.Guid];
-			yield return (_fileManifest.Manifest, chunk, (int)fileChunkPart.Offset, (int)fileChunkPart.Size, handle, offset);
-			offset += fileChunkPart.Size;
-		}
+		return SaveFileAsync(path, null, null, maxDegreeOfParallelism, cancellationToken);
 	}
 
 	public override int Read(byte[] buffer, int offset, int count)
@@ -182,7 +254,6 @@ public class FFileManifestStream : Stream
 				await chunk.ReadDataAsync(poolBuffer, _fileManifest.Manifest, cancellationToken).ConfigureAwait(false);
 
 				var chunkOffset = chunkPart.Offset + startPos;
-				//chunkStream.Position = chunkOffset;
 				var chunkBytes = chunkPart.Size - startPos;
 				var bytesLeft = (uint)count - bytesRead;
 
@@ -194,14 +265,11 @@ public class FFileManifestStream : Stream
 				}
 
 				Unsafe.CopyBlockUnaligned(ref buffer[bytesRead + offset], ref poolBuffer[chunkOffset], chunkBytes);
-				//await RandomAccess.ReadAsync(chunkHandle, buffer.AsMemory(bytesRead + offset, chunkBytes), chunkOffset, cancellationToken).ConfigureAwait(false);
 				bytesRead += chunkBytes;
 				startPos = 0;
 
 				if (++i == _fileManifest.ChunkParts.Length)
-				{
 					break;
-				}
 			}
 		}
 		finally
@@ -267,4 +335,16 @@ public class FFileManifestStream : Stream
 		=> throw new NotSupportedException();
 	public override void Flush()
 		=> throw new NotSupportedException();
+}
+
+public class SaveProgressChangedEventArgs : ProgressChangedEventArgs
+{
+	internal SaveProgressChangedEventArgs(int progressPercentage, object? userState, long bytesSaved, long totalBytesToSave) : base(progressPercentage, userState)
+	{
+		BytesSaved = bytesSaved;
+		TotalBytesToSave = totalBytesToSave;
+	}
+ 
+	public long BytesSaved { get; }
+	public long TotalBytesToSave { get; }
 }

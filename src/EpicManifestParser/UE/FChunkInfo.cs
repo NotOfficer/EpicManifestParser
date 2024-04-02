@@ -36,7 +36,9 @@ public class FChunkInfo
 	public int64 FileSize { get; internal set; }
 
 	internal string? CachePath { get; set; }
-	internal string? Url { get; set; }
+
+	public Uri GetUri(FBuildPatchAppManifest manifest) =>
+		new($"{manifest.Options.ChunkBaseUrl}{manifest.GetChunkSubdir()}/{GroupNumber:D2}/{Hash:X16}_{Guid}.chunk", UriKind.Absolute);
 
 	internal static FChunkInfo[] ReadChunkDataList(GenericBufferReader reader, Dictionary<FGuid, FChunkInfo> chunksDict)
 	{
@@ -120,9 +122,9 @@ public class FChunkInfo
 				await RandomAccess.ReadAsync(fileHandle, destination.AsMemory(0, fileSize), 0, cancellationToken).ConfigureAwait(false);
 			}
 
-			var url = $"{manifest.Options.ChunkBaseUrl}{manifest.GetChunkSubdir()}/{GroupNumber:D2}/{Hash:X16}_{Guid}.chunk";
+			var uri = GetUri(manifest);
 			var destMs = new MemoryStream(destination, 0, destination.Length, true);
-			using var res = await manifest.Options.Client!.GetAsync(url, cancellationToken).ConfigureAwait(false);
+			using var res = await manifest.Options.Client!.GetAsync(uri, cancellationToken).ConfigureAwait(false);
 			await res.Content.CopyToAsync(destMs, cancellationToken).ConfigureAwait(false);
 			fileSize = (int)destMs.Position;
 
