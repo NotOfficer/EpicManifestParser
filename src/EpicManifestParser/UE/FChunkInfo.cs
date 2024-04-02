@@ -214,8 +214,9 @@ public class FChunkInfo
 		{
 			var uri = GetUri(manifest);
 			using var res = await manifest.Options.Client!.GetAsync(uri, cancellationToken).ConfigureAwait(false);
+			res.EnsureSuccessStatusCode();
 			var poolBufferSize = res.Content.Headers.ContentLength ?? manifest.Options.ChunkDownloadBufferSize;
-			poolBuffer = ArrayPool<byte>.Shared.Rent(manifest.Options.ChunkDownloadBufferSize);
+			poolBuffer = ArrayPool<byte>.Shared.Rent((int)poolBufferSize);
 			var destMs = new MemoryStream(poolBuffer, 0, poolBuffer.Length, true);
 			await res.Content.CopyToAsync(destMs, cancellationToken).ConfigureAwait(false);
 			var responseSize = (int)destMs.Length;
