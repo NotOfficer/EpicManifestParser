@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Net;
 
 using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Configs;
 
 using EpicManifestParser;
 using EpicManifestParser.Api;
@@ -10,8 +11,8 @@ using EpicManifestParser.UE;
 
 using ZlibngDotNet;
 
-//BenchmarkDotNet.Running.BenchmarkRunner.Run<Benchmarks>();
-//return;
+BenchmarkDotNet.Running.BenchmarkRunner.Run<Benchmarks>();
+return;
 
 var client = new HttpClient(new HttpClientHandler
 {
@@ -54,26 +55,21 @@ var manifest = FBuildPatchAppManifest.Deserialize(manifestBuffer, options);
 sw.Stop();
 Console.WriteLine(Math.Round(sw.Elapsed.TotalMilliseconds, 0));
 
-var testChunk = manifest.ChunkDataList[69];
-var testBuffer = new byte[testChunk.WindowSize];
-await testChunk.ReadDataAsync(testBuffer, manifest);
-sw.Restart();
-await testChunk.ReadDataAsync(testBuffer, manifest);
-sw.Stop();
-Console.WriteLine(Math.Round(sw.Elapsed.TotalMilliseconds, 0));
-
 {
 	var fileManifest = manifest.FileManifestList.First(x =>
 		x.Filename.EndsWith("/pakchunk0optional-WindowsClient.ucas", StringComparison.Ordinal));
 	var fileManifestFileName = Path.GetFileName(fileManifest.Filename);
-	var fileManifestStream = fileManifest.GetStream();
+	var fileManifestStream = fileManifest.GetStream(false);
 
-	//await fileManifestStream.SaveFileAsync(Path.Combine(Benchmarks.DownloadsDir, "pakchunk0optional-WindowsClient.ucas"));
+	await fileManifestStream.SaveFileAsync(Path.Combine(Benchmarks.DownloadsDir, fileManifestFileName));
 
 	var fileBuffer = await fileManifestStream.SaveBytesAsync();
-	FSHAHash.TryCompute(fileBuffer, out var hash);
-	Console.WriteLine(hash);
+	FSHAHash.TryCompute(fileBuffer, out var hash1);
+	Console.WriteLine(hash1);
+
 	await fileManifestStream.SaveToAsync(new MemoryStream(fileBuffer, true), ProgressCallback, fileManifestFileName);
+	FSHAHash.TryCompute(fileBuffer, out var hash2);
+	Console.WriteLine(hash2);
 
 	static void ProgressCallback(SaveProgressChangedEventArgs eventArgs)
 	{
@@ -82,11 +78,11 @@ Console.WriteLine(Math.Round(sw.Elapsed.TotalMilliseconds, 0));
 	}
 }
 
-var chunkUrl = $"http://cloudflare.epicgamescdn.com/Builds/Fortnite/CloudDir/ChunksV4/{testChunk.GroupNumber:D2}/{testChunk.Hash:X16}_{testChunk.Guid}.chunk";
-Console.WriteLine(chunkUrl);
 Console.ReadLine();
 
-[MemoryDiagnoser(false)]
+[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
+[CategoriesColumn]
+[MemoryDiagnoser(false), BaselineColumn]
 public class Benchmarks
 {
 	public static string DownloadsDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
@@ -100,8 +96,12 @@ public class Benchmarks
 	private byte[] _manifestBuffer = null!;
 	private Zlibng _zlibng = null!;
 	private byte[] _manifestInfoBuffer = null!;
-	private FFileManifestStream _fileManifestStream = null!;
+	private FBuildPatchAppManifest _manifest = null!;
+	private FFileManifestStream _fileManifestStream1 = null!;
+	private FFileManifestStream _fileManifestStream2 = null!;
 	private byte[] _fileBuffer = null!;
+	private MemoryStream _fileMs = null!;
+	private string _filePath = null!;
 
 	[GlobalSetup]
 	public void Setup()
@@ -110,36 +110,74 @@ public class Benchmarks
 		_zlibng = new Zlibng(ZlibngPath);
 		_manifestInfoBuffer = File.ReadAllBytes(ManifestInfoPath);
 
-		var manifest = FBuildPatchAppManifest.Deserialize(_manifestBuffer, options =>
+		_manifest = FBuildPatchAppManifest.Deserialize(_manifestBuffer, options =>
 		{
 			options.Zlibng = _zlibng;
-			options.ChunkBaseUrl = "http://epicgames-download1.akamaized.net/Builds/Fortnite/CloudDir/";
+			//options.ChunkBaseUrl = "http://download.epicgames.com/Builds/Fortnite/CloudDir/";            // 20-21 ms
+			//options.ChunkBaseUrl = "http://cloudflare.epicgamescdn.com/Builds/Fortnite/CloudDir/";       // 34-36 ms
+			options.ChunkBaseUrl = "http://fastly-download.epicgames.com/Builds/Fortnite/CloudDir/";     // 19-20 ms
+			//options.ChunkBaseUrl = "http://epicgames-download1.akamaized.net/Builds/Fortnite/CloudDir/"; // 27-28 ms
 			options.ChunkCacheDirectory = Directory.CreateDirectory(Path.Combine(DownloadsDir, "chunks_v2")).FullName;
 		});
-		var fileManifest = manifest.FileManifestList.First(x =>
+		var fileManifest = _manifest.FileManifestList.First(x =>
 			x.Filename.EndsWith("/pakchunk0optional-WindowsClient.ucas", StringComparison.Ordinal));
-		_fileManifestStream = fileManifest.GetStream();
+		_filePath = Path.Combine(DownloadsDir, Path.GetFileName(fileManifest.Filename));
 		_fileBuffer = new byte[fileManifest.FileSize];
+		_fileMs = new MemoryStream(_fileBuffer, true);
+		_fileManifestStream1 = fileManifest.GetStream();
+		_fileManifestStream2 = fileManifest.GetStream(false);
 	}
 
-	[Benchmark]
-	public FBuildPatchAppManifest FBuildPatchAppManifest_Deserialize()
+	//[Benchmark]
+	//public FBuildPatchAppManifest FBuildPatchAppManifest_Deserialize()
+	//{
+	//	return FBuildPatchAppManifest.Deserialize(_manifestBuffer, options =>
+	//	{
+	//		options.Zlibng = _zlibng;
+	//	});
+	//}
+
+	//[Benchmark]
+	//public ManifestInfo? ManifestInfo_Deserialize()
+	//{
+	//	return ManifestInfo.Deserialize(_manifestInfoBuffer);
+	//}
+
+	[BenchmarkCategory("Buffer"), Benchmark(Baseline = true)]
+	public async Task FFileManifestStream_SaveBuffer()
 	{
-		return FBuildPatchAppManifest.Deserialize(_manifestBuffer, options =>
-		{
-			options.Zlibng = _zlibng;
-		});
+		await _fileManifestStream2.SaveBytesAsync(_fileBuffer);
 	}
 
-	[Benchmark]
-	public ManifestInfo? ManifestInfo_Deserialize()
+	[BenchmarkCategory("Buffer"), Benchmark]
+	public async Task FFileManifestStream_SaveBuffer_AsIs()
 	{
-		return ManifestInfo.Deserialize(_manifestInfoBuffer);
+		await _fileManifestStream1.SaveBytesAsync(_fileBuffer);
 	}
 
-	[Benchmark]
-	public async Task FFileManifestStream_Save()
+	[BenchmarkCategory("File"), Benchmark(Baseline = true)]
+	public async Task FFileManifestStream_SaveFile()
 	{
-		await _fileManifestStream.SaveBytesAsync(_fileBuffer);
+		await _fileManifestStream2.SaveFileAsync(_filePath);
+	}
+
+	[BenchmarkCategory("File"), Benchmark]
+	public async Task FFileManifestStream_SaveFile_AsIs()
+	{
+		await _fileManifestStream1.SaveFileAsync(_filePath);
+	}
+
+	[BenchmarkCategory("Stream"), Benchmark(Baseline = true)]
+	public async Task FFileManifestStream_SaveStream()
+	{
+		_fileMs.Position = 0;
+		await _fileManifestStream2.SaveToAsync(_fileMs);
+	}
+
+	[BenchmarkCategory("Stream"), Benchmark]
+	public async Task FFileManifestStream_SaveStream_AsIs()
+	{
+		_fileMs.Position = 0;
+		await _fileManifestStream1.SaveToAsync(_fileMs);
 	}
 }
