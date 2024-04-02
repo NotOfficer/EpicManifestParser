@@ -31,10 +31,10 @@ public class FBuildPatchAppManifest
 
 	public string GetChunkSubdir() => ManifestMeta.FeatureLevel switch
 	{
-		< EFeatureLevel.DataFileRenames => "Chunks",
-		< EFeatureLevel.ChunkCompressionSupport => "ChunksV2",
-		< EFeatureLevel.VariableSizeChunksWithoutWindowSizeChunkInfo => "ChunksV3",
-		_ => "ChunksV4"
+		> EFeatureLevel.StoredAsBinaryData => "ChunksV4",
+		> EFeatureLevel.StoresDataGroupNumbers => "ChunksV3",
+		> EFeatureLevel.StartStoringVersion => "ChunksV2",
+		_ => "Chunks"
 	};
 
 	/// <summary>

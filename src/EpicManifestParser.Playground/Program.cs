@@ -67,9 +67,10 @@ Console.WriteLine(Math.Round(sw.Elapsed.TotalMilliseconds, 0));
 		x.Filename.EndsWith("/pakchunk0optional-WindowsClient.ucas", StringComparison.Ordinal));
 	var fileManifestFileName = Path.GetFileName(fileManifest.Filename);
 	var fileManifestStream = fileManifest.GetStream();
-	//await fileManifestStream.SaveFileAsync(Path.Combine(Benchmarks.DownloadsDir, "pakchunk0optional-WindowsClient.ucas"));
-	var fileBuffer = await fileManifestStream.SaveBytesAsync(ProgressCallback, fileManifestFileName);
 
+	//await fileManifestStream.SaveFileAsync(Path.Combine(Benchmarks.DownloadsDir, "pakchunk0optional-WindowsClient.ucas"));
+
+	var fileBuffer = await fileManifestStream.SaveBytesAsync();
 	FSHAHash.TryCompute(fileBuffer, out var hash);
 	Console.WriteLine(hash);
 	await fileManifestStream.SaveToAsync(new MemoryStream(fileBuffer, true), ProgressCallback, fileManifestFileName);
