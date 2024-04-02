@@ -108,7 +108,7 @@ public class FFileManifest : IComparable<FFileManifest>, IComparable
 		return files;
 	}
 
-	public FFileManifestStream GetStream() => new(this);
+	public FFileManifestStream GetStream(bool cacheAsIs = true) => new(this, cacheAsIs);
 
 	public int CompareTo(FFileManifest? other)
 	{

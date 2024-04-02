@@ -1,5 +1,6 @@
 ﻿using System.Buffers;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 using GenericReader;
@@ -86,7 +87,8 @@ public class FChunkInfo
 		return chunks;
 	}
 
-	public async Task<int> ReadDataAsync(byte[] destination, FBuildPatchAppManifest manifest, CancellationToken cancellationToken = default)
+	[SuppressMessage("ReSharper", "UseSymbolAlias")]
+	internal async Task<int> ReadDataAsIsAsync(byte[] destination, FBuildPatchAppManifest manifest, CancellationToken cancellationToken = default)
 	{
 		var fileSize = 0;
 		var shouldCache = manifest.Options.ChunkCacheDirectory is not null;
@@ -147,10 +149,7 @@ public class FChunkInfo
 		}
 
 		if (header.StoredAs.HasFlag(EChunkStorageFlags.Encrypted))
-		{
 			throw new NotSupportedException("encrypted chunks are not supported");
-		}
-
 		if (!header.StoredAs.HasFlag(EChunkStorageFlags.Compressed))
 			throw new UnreachableException("unknown/new chunk ChunkStorageFlag");
 
@@ -175,5 +174,103 @@ public class FChunkInfo
 		}
 
 		return header.DataSizeUncompressed;
+	}
+
+	[SuppressMessage("ReSharper", "UseSymbolAlias")]
+	internal async Task<int> ReadDataAsync(byte[] buffer, int offset, int count, int chunkPartOffset, FBuildPatchAppManifest manifest, CancellationToken cancellationToken = default)
+	{
+		var shouldCache = manifest.Options.ChunkCacheDirectory is not null;
+		string? cachePath = null;
+
+		if (shouldCache)
+		{
+			if (CachePath is not null)
+			{
+				using var fileHandle = File.OpenHandle(CachePath);
+				return await RandomAccess.ReadAsync(fileHandle, buffer.AsMemory(offset, count), chunkPartOffset, cancellationToken).ConfigureAwait(false);
+			}
+
+			cachePath = Path.Combine(manifest.Options.ChunkCacheDirectory!, $"{Hash:X16}_{Guid}.chunk");
+			if (File.Exists(cachePath))
+			{
+				CachePath = cachePath;
+				using var fileHandle = File.OpenHandle(CachePath);
+				return await RandomAccess.ReadAsync(fileHandle, buffer.AsMemory(offset, count), chunkPartOffset, cancellationToken).ConfigureAwait(false);
+			}
+		}
+
+		using var _ = await manifest.ChunksLocker.LockAsync(Guid, cancellationToken).ConfigureAwait(false);
+		if (shouldCache && File.Exists(cachePath))
+		{
+			CachePath = cachePath;
+			using var fileHandle = File.OpenHandle(CachePath);
+			return await RandomAccess.ReadAsync(fileHandle, buffer.AsMemory(offset, count), chunkPartOffset, cancellationToken).ConfigureAwait(false);
+		}
+
+		byte[]? poolBuffer = null;
+		byte[]? uncompressPoolBuffer = null;
+
+		try
+		{
+			var uri = GetUri(manifest);
+			using var res = await manifest.Options.Client!.GetAsync(uri, cancellationToken).ConfigureAwait(false);
+			var poolBufferSize = res.Content.Headers.ContentLength ?? manifest.Options.ChunkDownloadBufferSize;
+			poolBuffer = ArrayPool<byte>.Shared.Rent(manifest.Options.ChunkDownloadBufferSize);
+			var destMs = new MemoryStream(poolBuffer, 0, poolBuffer.Length, true);
+			await res.Content.CopyToAsync(destMs, cancellationToken).ConfigureAwait(false);
+			var responseSize = (int)destMs.Length;
+
+			var reader = new GenericBufferReader(new Memory<byte>(poolBuffer, 0, responseSize));
+			var header = new FChunkHeader(reader);
+
+			if (header.StoredAs == EChunkStorageFlags.None)
+			{
+				Unsafe.CopyBlockUnaligned(ref buffer[offset], ref poolBuffer[reader.Position + chunkPartOffset], (uint)count);
+
+				if (shouldCache)
+				{
+					using var fileHandle = File.OpenHandle(cachePath!, FileMode.Create, FileAccess.Write, FileShare.None, FileOptions.None, header.DataSizeCompressed);
+					await RandomAccess.WriteAsync(fileHandle, new ReadOnlyMemory<byte>(poolBuffer, reader.Position, header.DataSizeCompressed), 0, cancellationToken).ConfigureAwait(false);
+					RandomAccess.FlushToDisk(fileHandle);
+					CachePath = cachePath;
+				}
+
+				return count;
+			}
+
+			if (header.StoredAs.HasFlag(EChunkStorageFlags.Encrypted))
+				throw new NotSupportedException("encrypted chunks are not supported");
+			if (!header.StoredAs.HasFlag(EChunkStorageFlags.Compressed))
+				throw new UnreachableException("unknown/new chunk ChunkStorageFlag");
+
+			// cant seek for uncompress
+			uncompressPoolBuffer = ArrayPool<byte>.Shared.Rent(header.DataSizeUncompressed);
+			var result = manifest.Options.Zlibng!.Uncompress(
+				uncompressPoolBuffer.AsSpan(0, header.DataSizeUncompressed),
+				poolBuffer.AsSpan(reader.Position, header.DataSizeCompressed),
+				out int bytesWritten);
+
+			if (result != ZlibngCompressionResult.Ok || bytesWritten != header.DataSizeUncompressed)
+				throw new FileLoadException("failed to uncompress chunk data");
+
+			Unsafe.CopyBlockUnaligned(ref buffer[offset], ref uncompressPoolBuffer[chunkPartOffset], (uint)count);
+
+			if (shouldCache)
+			{
+				using var fileHandle = File.OpenHandle(cachePath!, FileMode.Create, FileAccess.Write, FileShare.None, FileOptions.None, header.DataSizeUncompressed);
+				await RandomAccess.WriteAsync(fileHandle, new ReadOnlyMemory<byte>(uncompressPoolBuffer, 0, header.DataSizeUncompressed), 0, cancellationToken).ConfigureAwait(false);
+				RandomAccess.FlushToDisk(fileHandle);
+				CachePath = cachePath;
+			}
+
+			return count;
+		}
+		finally
+		{
+			if (poolBuffer is not null)
+				ArrayPool<byte>.Shared.Return(poolBuffer);
+			if (uncompressPoolBuffer is not null)
+				ArrayPool<byte>.Shared.Return(uncompressPoolBuffer);
+		}
 	}
 }
