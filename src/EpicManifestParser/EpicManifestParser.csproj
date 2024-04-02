@@ -14,7 +14,6 @@
     <RepositoryUrl>https://github.com/NotOfficer/EpicManifestParser</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
     <PackageIcon>icon.png</PackageIcon>
     <AssemblyVersion>2.1.2.0</AssemblyVersion>
