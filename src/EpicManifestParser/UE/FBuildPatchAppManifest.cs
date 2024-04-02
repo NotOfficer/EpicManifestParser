@@ -1,5 +1,4 @@
 ﻿using System.Buffers;
-using System.Net;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -393,18 +392,7 @@ public class FBuildPatchAppManifest
 				lockerOptions.PoolInitialFill = 64;
 			});
 
-			Options.Client ??= new HttpClient(new HttpClientHandler
-			{
-				UseCookies = false,
-				UseProxy = false,
-				AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip,
-				MaxConnectionsPerServer = 256
-			})
-			{
-				DefaultRequestVersion = new Version(1, 1),
-				DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact,
-				Timeout = TimeSpan.FromSeconds(30)
-			};
+			Options.CreateDefaultClient();
 		}
 	}
 }

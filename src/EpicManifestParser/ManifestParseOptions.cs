@@ -1,4 +1,6 @@
-﻿using ZlibngDotNet;
+﻿using System.Net;
+using EpicManifestParser.Api;
+using ZlibngDotNet;
 
 namespace EpicManifestParser;
 
@@ -30,9 +32,30 @@ public class ManifestParseOptions
 	public string? ChunkCacheDirectory { get; set; }
 
 	/// <summary>
+	/// Optional for caching manifests when using <see cref="ManifestInfo.DownloadAndParseAsync"/>.
+	/// </summary>
+	public string? ManifestCacheDirectory { get; set; }
+
+	/// <summary>
 	/// Required for:
 	/// - deserializing compressed binary manifests
 	/// - downloading compressed chunks
 	/// </summary>
 	public Zlibng? Zlibng { get; set; }
+
+	internal void CreateDefaultClient()
+	{
+		Client ??= new HttpClient(new HttpClientHandler
+		{
+			UseCookies = false,
+			UseProxy = false,
+			AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip,
+			MaxConnectionsPerServer = 256
+		})
+		{
+			DefaultRequestVersion = new Version(1, 1),
+			DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact,
+			Timeout = TimeSpan.FromSeconds(30)
+		};
+	}
 }
