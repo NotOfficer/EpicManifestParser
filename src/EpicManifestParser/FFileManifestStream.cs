@@ -7,10 +7,12 @@ using EpicManifestParser.UE;
 
 using Microsoft.Win32.SafeHandles;
 
+using OffiUtils;
+
 namespace EpicManifestParser;
 // ReSharper disable UseSymbolAlias
 
-public class FFileManifestStream : Stream
+public class FFileManifestStream : Stream, IRandomAccessStream
 {
 	private readonly FFileManifest _fileManifest;
 	private readonly bool _cacheAsIs;
@@ -33,7 +35,7 @@ public class FFileManifestStream : Stream
 		}
 	}
 
-	public string FileName => _fileManifest.Filename;
+	public string FileName => _fileManifest.FileName;
 
 	internal FFileManifestStream(FFileManifest fileManifest, bool cacheAsIs = true)
 	{
@@ -292,6 +294,18 @@ public class FFileManifestStream : Stream
 		return bytesRead;
 	}
 
+	public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+	{
+		var bytesRead = await ReadAtAsync(_position, buffer, cancellationToken).ConfigureAwait(false);
+		_position += bytesRead;
+		return bytesRead;
+	}
+
+	public int ReadAt(long position, byte[] buffer, int offset, int count)
+	{
+		return ReadAtAsync(position, buffer, offset, count, CancellationToken.None).GetAwaiter().GetResult();
+	}
+
 	public async Task<int> ReadAtAsync(long position, byte[] buffer, int offset, int count, CancellationToken cancellationToken)
 	{
 		var (i, startPos) = GetChunkIndex(position);
@@ -367,25 +381,60 @@ public class FFileManifestStream : Stream
 		return (int)bytesRead;
 	}
 
-	public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+	public Task<int> ReadAtAsync(long position, Memory<byte> buffer, CancellationToken cancellationToken = default)
 	{
 		if (cancellationToken.IsCancellationRequested)
-			return ValueTask.FromCanceled<int>(cancellationToken);
+			return Task.FromCanceled<int>(cancellationToken);
 
 		try
 		{
-			return new ValueTask<int>(
+			return
 				MemoryMarshal.TryGetArray(buffer, out ArraySegment<byte> destinationArray) ?
-					ReadAsync(destinationArray.Array!, destinationArray.Offset, destinationArray.Count, cancellationToken) :
-					throw new NotSupportedException("failed to get memory array"));
+					ReadAtAsync(position, destinationArray.Array!, destinationArray.Offset, destinationArray.Count, cancellationToken) :
+					throw new NotSupportedException("failed to get memory array");
 		}
 		catch (OperationCanceledException oce)
 		{
-			return new ValueTask<int>(Task.FromCanceled<int>(oce.CancellationToken));
+			return Task.FromCanceled<int>(oce.CancellationToken);
 		}
 		catch (Exception exception)
 		{
-			return ValueTask.FromException<int>(exception);
+			return Task.FromException<int>(exception);
+		}
+	}
+
+	private long _lastChunkPartPosition;
+	private uint _lastChunkPartSize;
+	private int _lastChunkPartIndex;
+
+	private (int Index, uint ChunkPos) GetChunkIndexNew(long position)
+	{
+		lock (_fileManifest)
+		{
+			var maxPosition = _lastChunkPartPosition + _lastChunkPartSize;
+			if (maxPosition < position && position >= _lastChunkPartPosition)
+			{
+				return (_lastChunkPartIndex, (uint)(_lastChunkPartPosition - position));
+			}
+
+			var chunkPartPosition = 0L;
+
+			for (var i = 0; i < _fileManifest.ChunkParts.Length; i++)
+			{
+				var chunkPart = _fileManifest.ChunkParts[i];
+
+				if (chunkPartPosition >= position)
+				{
+					_lastChunkPartPosition = chunkPartPosition;
+					_lastChunkPartSize = chunkPart.Size;
+					_lastChunkPartIndex = i;
+					return (i, (uint)(chunkPartPosition - position));
+				}
+
+				chunkPartPosition += chunkPart.Size;
+			}
+
+			return (-1, 0);
 		}
 	}
 
@@ -393,12 +442,12 @@ public class FFileManifestStream : Stream
 	{
 		for (var i = 0; i < _fileManifest.ChunkParts.Length; i++)
 		{
-			var chunk = _fileManifest.ChunkParts[i];
+			var chunkPart = _fileManifest.ChunkParts[i];
 
-			if (position < chunk.Size)
+			if (position < chunkPart.Size)
 				return (i, (uint)position);
 
-			position -= chunk.Size;
+			position -= chunkPart.Size;
 		}
 
 		return (-1, 0);
