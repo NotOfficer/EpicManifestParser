@@ -352,11 +352,7 @@ public class FBuildPatchAppManifest
 			}
 
 			var reader = new GenericBufferReader(manifestRawData);
-
-			//File.WriteAllBytes(@"C:\Users\Marlon\Downloads\manifest.bin", manifestRawData.ToArray());
-
 			var chunks = new Dictionary<FGuid, FChunkInfo>();
-
 			var manifest = new FBuildPatchAppManifest
 			{
 				Chunks = chunks,
