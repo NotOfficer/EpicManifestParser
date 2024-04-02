@@ -117,7 +117,7 @@ public class FBuildPatchAppManifest
 			var jsonFileManifest = jsonFileManifestList[i]!;
 			var fileManifest = fileManifestsSpan[i] = new FFileManifest
 			{
-				Filename = jsonFileManifest["Filename"].GetString(),
+				FileName = jsonFileManifest["Filename"].GetString(),
 				FileHash = jsonFileManifest["FileHash"].GetBlob<FSHAHash>(),
 				InstallTags = jsonFileManifest["InstallTags"].Parse<string[]>([]),
 				SymlinkTarget = jsonFileManifest["SymlinkTarget"].GetString()

@@ -7,7 +7,7 @@ public class FFileManifest : IComparable<FFileManifest>, IComparable
 	/// <summary>
 	/// The build relative filename.
 	/// </summary>
-	public string Filename { get; internal set; } = "";
+	public string FileName { get; internal set; } = "";
 	/// <summary>
 	/// Whether this is a symlink to another file.
 	/// </summary>
@@ -56,7 +56,7 @@ public class FFileManifest : IComparable<FFileManifest>, IComparable
 			for (var i = 0; i < elementCount; i++)
 			{
 				var file = new FFileManifest();
-				file.Filename = reader.ReadFString();
+				file.FileName = reader.ReadFString();
 				filesSpan[i] = file;
 			}
 			for (var i = 0; i < elementCount; i++)
@@ -114,7 +114,7 @@ public class FFileManifest : IComparable<FFileManifest>, IComparable
 	{
 		if (ReferenceEquals(this, other)) return 0;
 		if (ReferenceEquals(null, other)) return 1;
-		return string.Compare(Filename, other.Filename, StringComparison.Ordinal);
+		return string.Compare(FileName, other.FileName, StringComparison.Ordinal);
 	}
 
 	public int CompareTo(object? obj)

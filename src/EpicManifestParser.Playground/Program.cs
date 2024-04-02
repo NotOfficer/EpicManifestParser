@@ -57,8 +57,8 @@ Console.WriteLine(Math.Round(sw.Elapsed.TotalMilliseconds, 0));
 
 {
 	var fileManifest = manifest.FileManifestList.First(x =>
-		x.Filename.EndsWith("/pakchunk0optional-WindowsClient.ucas", StringComparison.Ordinal));
-	var fileManifestFileName = Path.GetFileName(fileManifest.Filename);
+		x.FileName.EndsWith("/pakchunk0optional-WindowsClient.ucas", StringComparison.Ordinal));
+	var fileManifestFileName = Path.GetFileName(fileManifest.FileName);
 	var fileManifestStream = fileManifest.GetStream(false);
 
 	await fileManifestStream.SaveFileAsync(Path.Combine(Benchmarks.DownloadsDir, fileManifestFileName));
@@ -120,8 +120,8 @@ public class Benchmarks
 			options.ChunkCacheDirectory = Directory.CreateDirectory(Path.Combine(DownloadsDir, "chunks_v2")).FullName;
 		});
 		var fileManifest = _manifest.FileManifestList.First(x =>
-			x.Filename.EndsWith("/pakchunk0optional-WindowsClient.ucas", StringComparison.Ordinal));
-		_filePath = Path.Combine(DownloadsDir, Path.GetFileName(fileManifest.Filename));
+			x.FileName.EndsWith("/pakchunk0optional-WindowsClient.ucas", StringComparison.Ordinal));
+		_filePath = Path.Combine(DownloadsDir, Path.GetFileName(fileManifest.FileName));
 		_fileBuffer = new byte[fileManifest.FileSize];
 		_fileMs = new MemoryStream(_fileBuffer, true);
 		_fileManifestStream1 = fileManifest.GetStream();
