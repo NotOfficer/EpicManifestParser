@@ -7,39 +7,37 @@
 
     <NeutralLanguage>en</NeutralLanguage>
     <Authors>NotOfficer</Authors>
-    <Company>NotOfficer</Company>
     <Description>A .NET parser &amp; downloader for EpicGames manifests.</Description>
     <PackageTags>manifest parser, epicgames manifest parser</PackageTags>
-    <Copyright>Copyright (c) 2024 NotOfficer</Copyright>
     <RepositoryUrl>https://github.com/NotOfficer/EpicManifestParser</RepositoryUrl>
+    <Copyright>Copyright (c) 2024 NotOfficer</Copyright>
     <RepositoryType>git</RepositoryType>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
     <PackageIcon>icon.png</PackageIcon>
-    <AssemblyVersion>2.1.2.0</AssemblyVersion>
-    <FileVersion>2.1.2.0</FileVersion>
-    <Version>2.1.2</Version>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <AssemblyVersion>2.2.0.0</AssemblyVersion>
+    <FileVersion>2.2.0.0</FileVersion>
+    <Version>2.2.0</Version>
+  </PropertyGroup>
+
+   <PropertyGroup>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="..\..\icon.png">
-      <Pack>True</Pack>
-      <PackagePath></PackagePath>
-    </None>
-    <None Include="..\..\LICENSE">
-      <Pack>True</Pack>
-      <PackagePath></PackagePath>
-    </None>
-    <None Include="..\..\LICENSE" Pack="true" PackagePath=""/>
-    <None Include="..\..\icon.png" Pack="true" PackagePath=""/>
+    <None Include="..\..\icon.png" Pack="true" PackagePath="" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="AsyncKeyedLock" Version="6.3.4" />
     <PackageReference Include="Flurl" Version="4.0.0" />
-    <PackageReference Include="GenericReader" Version="2.1.1" />
+    <PackageReference Include="GenericReader" Version="2.1.2" />
     <PackageReference Include="OffiUtils" Version="1.1.0" />
-    <PackageReference Include="Zlib-ng.NET" Version="1.0.0" />
+    <PackageReference Include="Zlib-ng.NET" Version="1.0.1" />
   </ItemGroup>
 
 </Project>
