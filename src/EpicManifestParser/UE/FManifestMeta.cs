@@ -2,34 +2,67 @@
 
 namespace EpicManifestParser.UE;
 
+/// <summary>
+/// UE FManifestMeta struct
+/// </summary>
 public class FManifestMeta
 {
-	// The feature level support this build was created with, regardless of the serialised format.
+	/// <summary>
+	/// The feature level support this build was created with, regardless of the serialised format.
+	/// </summary>
 	public EFeatureLevel FeatureLevel { get; internal set; } = EFeatureLevel.Invalid;
-	// Whether this is a legacy 'nochunks' build.
+	/// <summary>
+	/// Whether this is a legacy 'nochunks' build.
+	/// </summary>
 	public bool bIsFileData { get; internal set; }
-	// The app id provided at generation.
+	/// <summary>
+	/// The app id provided at generation.
+	/// </summary>
 	public uint32 AppID { get; internal set; }
-	// The app name string provided at generation.
+	/// <summary>
+	/// The app name string provided at generation.
+	/// </summary>
 	public string AppName { get; internal set; } = "";
-	// The build version string provided at generation.
+	/// <summary>
+	/// The build version string provided at generation.
+	/// </summary>
 	public string BuildVersion { get; internal set; } = "";
-	// The file in this manifest designated the application executable of the build.
+	/// <summary>
+	/// The file in this manifest designated the application executable of the build.
+	/// </summary>
 	public string LaunchExe { get; internal set; } = "";
-	// The command line required when launching the application executable.
+	/// <summary>
+	/// The command line required when launching the application executable.
+	/// </summary>
 	public string LaunchCommand { get; internal set; } = "";
-	// The set of prerequisite ids for dependencies that this build's prerequisite installer will apply.
+	/// <summary>
+	/// The set of prerequisite ids for dependencies that this build's prerequisite installer will apply.
+	/// </summary>
 	public string[] PrereqIds { get; internal set; } = [];
-	// A display string for the prerequisite provided at generation.
+	/// <summary>
+	/// A display string for the prerequisite provided at generation.
+	/// </summary>
 	public string PrereqName { get; internal set; } = "";
-	// The file in this manifest designated the launch executable of the prerequisite installer.
+	/// <summary>
+	/// The file in this manifest designated the launch executable of the prerequisite installer.
+	/// </summary>
 	public string PrereqPath { get; internal set; } = "";
-	// The command line required when launching the prerequisite installer.
+	/// <summary>
+	/// The command line required when launching the prerequisite installer.
+	/// </summary>
 	public string PrereqArgs { get; internal set; } = "";
-	// A unique build id generated at original chunking time to identify an exact build.
+	/// <summary>
+	/// A unique build id generated at original chunking time to identify an exact build.
+	/// </summary>
 	public string BuildId { get; internal set; } = "";
 
+	/// <summary>
+	/// Undocumented
+	/// </summary>
 	public string UninstallExe { get; internal set; } = "";
+	/// <summary>
+	/// Undocumented
+	/// </summary>
 	public string UninstallCommand { get; internal set; } = "";
 
 	internal FManifestMeta() { }
@@ -68,7 +101,7 @@ public class FManifestMeta
 		reader.Position = startPos + dataSize;
 	}
 
-	public static string GetBackwardsCompatibleBuildId(in FManifestMeta meta)
+	internal static string GetBackwardsCompatibleBuildId(in FManifestMeta meta)
 	{
 		// TODO: https://github.com/EpicGames/UnrealEngine/blob/a937fa584fbd6d69b7cf9c527907040c9dbf54fc/Engine/Source/Runtime/Online/BuildPatchServices/Private/BuildPatchUtil.cpp#L166
 		return "";

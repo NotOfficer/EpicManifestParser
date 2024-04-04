@@ -1,5 +1,4 @@
 ﻿using System.Buffers;
-using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -12,54 +11,64 @@ using OffiUtils;
 namespace EpicManifestParser;
 // ReSharper disable UseSymbolAlias
 
+/// <summary>
+/// A stream representing a <see cref="FFileManifest"/>
+/// </summary>
 public class FFileManifestStream : Stream, IRandomAccessStream
 {
 	private readonly FFileManifest _fileManifest;
 	private readonly bool _cacheAsIs;
 
+	/// <summary>Always <see langword="true"/></summary>
 	public override bool CanRead => true;
+	/// <summary>Always <see langword="true"/></summary>
 	public override bool CanSeek => true;
+	/// <summary>Always <see langword="true"/></summary>
 	public override bool CanWrite => false;
+	/// <summary>Gets the length/size of the stream</summary>
 	public override long Length => _fileManifest.FileSize;
 	
 	private long _position;
+
+	/// <summary>Gets or sets the current position within the stream.</summary>
 	public override long Position
 	{
 		get => _position;
 		set
 		{
 			if (value > Length || value < 0)
-				throw new ArgumentOutOfRangeException(nameof(value), value, null);
+				throw new ArgumentOutOfRangeException(nameof(value), value, "Value is negative or exceeds the stream's length");
 
 			_position = value;
 		}
 	}
 
+	/// <summary>Gets the file name of the <see cref="FFileManifest"/> represented by this stream</summary>
 	public string FileName => _fileManifest.FileName;
 
 	internal FFileManifestStream(FFileManifest fileManifest, bool cacheAsIs = true)
 	{
 		if (string.IsNullOrEmpty(fileManifest.Manifest.Options.ChunkBaseUrl))
-			throw new ArgumentException("missing DistrubutionPoint");
+			throw new ArgumentException("Missing ChunkBaseUrl");
 		if (fileManifest.Manifest.ManifestMeta.bIsFileData)
-			throw new NotSupportedException("filedata manifests are not supported");
+			throw new NotSupportedException("File-data manifests are not supported");
 
 		_fileManifest = fileManifest;
 		_cacheAsIs = cacheAsIs;
 	}
 
-	private class DownloadState
+	private class DownloadState<T>
 	{
 		public readonly byte[] DestinationBuffer;
 		public readonly SafeFileHandle DestinationHandle;
 		public readonly FBuildPatchAppManifest Manifest;
 
-		private readonly object? _userState;
-		private readonly Action<SaveProgressChangedEventArgs>? _callback;
+		private readonly T? _userState;
+		private readonly Action<SaveProgressChangedEventArgs<T>>? _callback;
 		private readonly long _totalBytesToSave;
 		private long _bytesSaved;
 
-		public DownloadState(SafeFileHandle destinationHandle, FBuildPatchAppManifest manifest, long totalBytesToSave, object? userState, Action<SaveProgressChangedEventArgs>? callback)
+		public DownloadState(SafeFileHandle destinationHandle, FBuildPatchAppManifest manifest, long totalBytesToSave, T? userState, Action<SaveProgressChangedEventArgs<T>>? callback)
 		{
 			DestinationHandle = destinationHandle;
 			DestinationBuffer = null!;
@@ -69,7 +78,7 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 			_totalBytesToSave = totalBytesToSave;
 		}
 
-		public DownloadState(byte[] destinationBuffer, FBuildPatchAppManifest manifest, long totalBytesToSave, object? userState, Action<SaveProgressChangedEventArgs>? callback)
+		public DownloadState(byte[] destinationBuffer, FBuildPatchAppManifest manifest, long totalBytesToSave, T? userState, Action<SaveProgressChangedEventArgs<T>>? callback)
 		{
 			DestinationBuffer = destinationBuffer;
 			DestinationHandle = null!;
@@ -88,17 +97,38 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 			{
 				_bytesSaved += amount;
 				var progress = (int)Math.Truncate((double)_bytesSaved / _totalBytesToSave * 100);
-				var eventArgs = new SaveProgressChangedEventArgs(progress, _userState, _bytesSaved, _totalBytesToSave);
+				var eventArgs = new SaveProgressChangedEventArgs<T>(_userState, _bytesSaved, _totalBytesToSave, progress);
 				_callback(eventArgs);
 			}
 		}
 	}
 
 	// TODO: make concurrent
-	public async Task SaveToAsync(Stream destination, Action<SaveProgressChangedEventArgs>? progressCallback,
-		object? userState = null, CancellationToken cancellationToken = default)
+	/// <summary>
+	/// 
+	/// </summary>
+	/// <typeparam name="TState"></typeparam>
+	/// <param name="destination"></param>
+	/// <param name="progressCallback"></param>
+	/// <param name="userState"></param>
+	/// <param name="maxDegreeOfParallelism"></param>
+	/// <param name="cancellationToken"></param>
+	/// <returns></returns>
+	public async Task SaveToAsync<TState>(Stream destination, Action<SaveProgressChangedEventArgs<TState>>? progressCallback,
+		TState? userState = default, int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
 	{
-		var downloadState = new DownloadState((byte[])null!, _fileManifest.Manifest, Length, userState, progressCallback);
+		if (destination is MemoryStream {Position: 0} ms)
+		{
+			ms.Capacity = (int)Length;
+			if (ms.TryGetBuffer(out var buffer))
+			{
+				await SaveBytesAsync(buffer.Array!, progressCallback, userState, maxDegreeOfParallelism, cancellationToken).ConfigureAwait(false);
+				ms.Position = (int)Length;
+				return;
+			}
+		}
+
+		var downloadState = new DownloadState<TState>((byte[])null!, _fileManifest.Manifest, Length, userState, progressCallback);
 
 		if (_cacheAsIs)
 		{
@@ -131,9 +161,6 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 					var chunk = _fileManifest.Manifest.Chunks[fileChunkPart.Guid];
 					await chunk.ReadDataAsync(poolBuffer, 0, (int)fileChunkPart.Size,
 						(int)fileChunkPart.Offset, _fileManifest.Manifest, cancellationToken).ConfigureAwait(false);
-					//await RandomAccess.WriteAsync(tuple.State.DestinationHandle,
-					//	new ReadOnlyMemory<byte>(poolBuffer, 0, (int)tuple.ChunkPartSize),
-					//	tuple.Offset, token).ConfigureAwait(false);
 					await destination.WriteAsync(new ReadOnlyMemory<byte>(poolBuffer, 0, (int)fileChunkPart.Size),
 						cancellationToken).ConfigureAwait(false);
 					downloadState.OnBytesWritten(fileChunkPart.Size);
@@ -148,15 +175,28 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 		await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
 	}
 
-	public Task SaveToAsync(Stream destination, CancellationToken cancellationToken = default)
+	/// <inheritdoc cref="SaveToAsync{TState}"/>
+	public Task SaveToAsync(Stream destination, int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
 	{
-		return SaveToAsync(destination, null, null, cancellationToken);
+		return SaveToAsync<nint>(destination, null, 0, maxDegreeOfParallelism, cancellationToken);
 	}
 
-	public async Task SaveBytesAsync(byte[] destination, Action<SaveProgressChangedEventArgs>? progressCallback,
-		object? userState = null, int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
+	/// <summary>
+	/// Asynchronously saves the current stream to a buffer.
+	/// </summary>
+	/// <typeparam name="TState">The type of the <paramref name="userState"/>.</typeparam>
+	/// <param name="destination">The destination buffer.</param>
+	/// <param name="progressCallback">The progress change callback. (optional)</param>
+	/// <param name="userState">The user state for the <paramref name="progressCallback"/>. (optional)</param>
+	/// <param name="maxDegreeOfParallelism">The maximum number of concurrent tasks saving/downloading to the destination.</param>
+	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+	/// <returns>A task that represents the entire save operation.</returns>
+	public async Task SaveBytesAsync<TState>(byte[] destination, Action<SaveProgressChangedEventArgs<TState>>? progressCallback,
+		TState? userState = default, int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
 	{
-		var downloadState = new DownloadState(destination, _fileManifest.Manifest, Length, userState, progressCallback);
+		ArgumentOutOfRangeException.ThrowIfLessThan(destination.Length, Length);
+
+		var downloadState = new DownloadState<TState>(destination, _fileManifest.Manifest, Length, userState, progressCallback);
 		var parallelOptions = new ParallelOptions
 		{
 			MaxDegreeOfParallelism = maxDegreeOfParallelism,
@@ -165,14 +205,14 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 		await Parallel.ForEachAsync(EnumerateChunksWithOffset(downloadState), parallelOptions, _cacheAsIs ? SaveAsIsAsync : SaveAsync).ConfigureAwait(false);
 		return;
 
-		static async ValueTask SaveAsync((DownloadState State, FChunkInfo Chunk, uint ChunkPartOffset, uint ChunkPartSize, long Offset) tuple, CancellationToken token)
+		static async ValueTask SaveAsync<T>((DownloadState<T> State, FChunkInfo Chunk, uint ChunkPartOffset, uint ChunkPartSize, long Offset) tuple, CancellationToken token)
 		{
 			await tuple.Chunk.ReadDataAsync(tuple.State.DestinationBuffer, (int)tuple.Offset, (int)tuple.ChunkPartSize,
 				(int)tuple.ChunkPartOffset, tuple.State.Manifest, token).ConfigureAwait(false);
 			tuple.State.OnBytesWritten(tuple.ChunkPartSize);
 		}
 
-		static async ValueTask SaveAsIsAsync((DownloadState State, FChunkInfo Chunk, uint ChunkPartOffset, uint ChunkPartSize, long Offset) tuple, CancellationToken token)
+		static async ValueTask SaveAsIsAsync<T>((DownloadState<T> State, FChunkInfo Chunk, uint ChunkPartOffset, uint ChunkPartSize, long Offset) tuple, CancellationToken token)
 		{
 			var poolBuffer = ArrayPool<byte>.Shared.Rent(tuple.State.Manifest.Options.ChunkDownloadBufferSize);
 
@@ -190,18 +230,41 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 		}
 	}
 
+	/// <summary>
+	/// Asynchronously saves the current stream to a buffer.
+	/// </summary>
+	/// <param name="destination">The destination buffer.</param>
+	/// <param name="maxDegreeOfParallelism">The maximum number of concurrent tasks saving/downloading to the destination.</param>
+	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+	/// <returns>A task that represents the entire save operation.</returns>
 	public Task SaveBytesAsync(byte[] destination, int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
 	{
-		return SaveBytesAsync(destination, null, null, maxDegreeOfParallelism, cancellationToken);
+		return SaveBytesAsync<nint>(destination, null, 0, maxDegreeOfParallelism, cancellationToken);
 	}
 
-	public async Task<byte[]> SaveBytesAsync(Action<SaveProgressChangedEventArgs> progressCallback, object? userState = null, int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
+	/// <summary>
+	/// Asynchronously saves the current stream to a buffer.
+	/// </summary>
+	/// <typeparam name="TState">The type of the <paramref name="userState"/>.</typeparam>
+	/// <param name="progressCallback">The progress change callback. (optional)</param>
+	/// <param name="userState">The user state for the <paramref name="progressCallback"/>. (optional)</param>
+	/// <param name="maxDegreeOfParallelism">The maximum number of concurrent tasks saving/downloading to the destination.</param>
+	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+	/// <returns>A task that represents the entire save operation.</returns>
+	public async Task<byte[]> SaveBytesAsync<TState>(Action<SaveProgressChangedEventArgs<TState>> progressCallback, TState? userState = default,
+		int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
 	{
 		var destination = new byte[Length];
 		await SaveBytesAsync(destination, progressCallback, userState, maxDegreeOfParallelism, cancellationToken).ConfigureAwait(false);
 		return destination;
 	}
 
+	/// <summary>
+	/// Asynchronously saves the current stream to a buffer.
+	/// </summary>
+	/// <param name="maxDegreeOfParallelism">The maximum number of concurrent tasks saving/downloading to the destination.</param>
+	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+	/// <returns>A task that represents the entire save operation.</returns>
 	public async Task<byte[]> SaveBytesAsync(int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
 	{
 		var destination = new byte[Length];
@@ -209,8 +272,8 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 		return destination;
 	}
 
-	private IEnumerable<(DownloadState State, FChunkInfo Chunk, uint ChunkPartOffset, uint ChunkPartSize, long Offset)>
-		EnumerateChunksWithOffset(DownloadState state)
+	private IEnumerable<(DownloadState<T> State, FChunkInfo Chunk, uint ChunkPartOffset, uint ChunkPartSize, long Offset)>
+		EnumerateChunksWithOffset<T>(DownloadState<T> state)
 	{
 		var offset = 0L;
 
@@ -222,10 +285,21 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 		}
 	}
 
-	public async Task SaveFileAsync(string path, Action<SaveProgressChangedEventArgs>? progressCallback, object? userState = null, int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
+	/// <summary>
+	/// Asynchronously saves the current stream to a file.
+	/// </summary>
+	/// <typeparam name="TState">The type of the <paramref name="userState"/>.</typeparam>
+	/// <param name="path">The path of the destination file.</param>
+	/// <param name="progressCallback">The progress change callback. (optional)</param>
+	/// <param name="userState">The user state for the <paramref name="progressCallback"/>. (optional)</param>
+	/// <param name="maxDegreeOfParallelism">The maximum number of concurrent tasks saving/downloading to the destination.</param>
+	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+	/// <returns>A task that represents the entire save operation.</returns>
+	public async Task SaveFileAsync<TState>(string path, Action<SaveProgressChangedEventArgs<TState>>? progressCallback, TState? userState = default,
+		int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
 	{
 		using var destination = File.OpenHandle(path, FileMode.Create, FileAccess.ReadWrite, FileShare.None, FileOptions.Asynchronous, Length);
-		var downloadState = new DownloadState(destination, _fileManifest.Manifest, Length, userState, progressCallback);
+		var downloadState = new DownloadState<TState>(destination, _fileManifest.Manifest, Length, userState, progressCallback);
 
 		var parallelOptions = new ParallelOptions
 		{
@@ -236,7 +310,7 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 		RandomAccess.FlushToDisk(destination);
 		return;
 
-		static async ValueTask SaveAsync((DownloadState State, FChunkInfo Chunk, uint ChunkPartOffset, uint ChunkPartSize, long Offset) tuple, CancellationToken token)
+		static async ValueTask SaveAsync<T>((DownloadState<T> State, FChunkInfo Chunk, uint ChunkPartOffset, uint ChunkPartSize, long Offset) tuple, CancellationToken token)
 		{
 			var poolBuffer = ArrayPool<byte>.Shared.Rent((int)tuple.ChunkPartSize);
 
@@ -255,7 +329,7 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 			}
 		}
 
-		static async ValueTask SaveAsIsAsync((DownloadState State, FChunkInfo Chunk, uint ChunkPartOffset, uint ChunkPartSize, long Offset) tuple, CancellationToken token)
+		static async ValueTask SaveAsIsAsync<T>((DownloadState<T> State, FChunkInfo Chunk, uint ChunkPartOffset, uint ChunkPartSize, long Offset) tuple, CancellationToken token)
 		{
 			var poolBuffer = ArrayPool<byte>.Shared.Rent(tuple.State.Manifest.Options.ChunkDownloadBufferSize);
 
@@ -274,16 +348,40 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 		}
 	}
 
+	/// <inheritdoc cref="SaveFileAsync{TState}"/>
 	public Task SaveFileAsync(string path, int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
 	{
-		return SaveFileAsync(path, null, null, maxDegreeOfParallelism, cancellationToken);
+		return SaveFileAsync<nint>(path, null, 0, maxDegreeOfParallelism, cancellationToken);
 	}
 
+	/// <summary>
+	/// Reads a sequence of bytes from the current stream.
+	/// </summary>
+	/// <param name="buffer">
+	/// When this method returns, contains the specified byte array with the values between
+	/// <paramref name="offset"></paramref> and (<paramref name="offset"></paramref> + <paramref name="count"></paramref> - 1)
+	/// replaced by the characters read from the current stream.
+	/// </param>
+	/// <param name="offset">The zero-based byte offset in <paramref name="buffer"/> at which to begin storing data from the current stream.</param>
+	/// <param name="count">The maximum number of bytes to read.</param>
+	/// <returns>The total number of bytes written into the <paramref name="buffer"/>.</returns>
 	public override int Read(byte[] buffer, int offset, int count)
 	{
 		return ReadAsync(buffer, offset, count, CancellationToken.None).GetAwaiter().GetResult();
 	}
 
+	/// <summary>
+	/// Asynchronously reads a sequence of bytes from the the current stream.
+	/// </summary>
+	/// <param name="buffer">
+	/// When this method returns, contains the specified byte array with the values between
+	/// <paramref name="offset"></paramref> and (<paramref name="offset"></paramref> + <paramref name="count"></paramref> - 1)
+	/// replaced by the characters read from the current stream.
+	/// </param>
+	/// <param name="offset">The zero-based byte offset in <paramref name="buffer"/> at which to begin storing data from the current stream.</param>
+	/// <param name="count">The maximum number of bytes to read.</param>
+	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+	/// <returns>The total number of bytes written into the <paramref name="buffer"/>.</returns>
 	public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
 	{
 		if (cancellationToken.IsCancellationRequested)
@@ -294,6 +392,12 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 		return bytesRead;
 	}
 
+	/// <summary>
+	/// Asynchronously reads a sequence of bytes from the current stream.
+	/// </summary>
+	/// <param name="buffer">The region of memory to write the data into.</param>
+	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+	/// <returns>The total number of bytes written into the <paramref name="buffer"/>.</returns>
 	public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
 	{
 		var bytesRead = await ReadAtAsync(_position, buffer, cancellationToken).ConfigureAwait(false);
@@ -301,11 +405,36 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 		return bytesRead;
 	}
 
+	/// <summary>
+	/// Reads a sequence of bytes from the given <paramref name="position"/> of the current stream.
+	/// </summary>
+	/// <param name="position">The position to begin reading from.</param>
+	/// <param name="buffer">
+	/// When this method returns, contains the specified byte array with the values between
+	/// <paramref name="offset"></paramref> and (<paramref name="offset"></paramref> + <paramref name="count"></paramref> - 1)
+	/// replaced by the characters read from the current stream.
+	/// </param>
+	/// <param name="offset">The zero-based byte offset in <paramref name="buffer"/> at which to begin storing data from the current stream.</param>
+	/// <param name="count">The maximum number of bytes to read.</param>
+	/// <returns>The total number of bytes written into the <paramref name="buffer"/>.</returns>
 	public int ReadAt(long position, byte[] buffer, int offset, int count)
 	{
 		return ReadAtAsync(position, buffer, offset, count, CancellationToken.None).GetAwaiter().GetResult();
 	}
 
+	/// <summary>
+	/// Asynchronously reads a sequence of bytes from the given <paramref name="position"/> of the current stream.
+	/// </summary>
+	/// <param name="position">The position to begin reading from.</param>
+	/// <param name="buffer">
+	/// When this method returns, contains the specified byte array with the values between
+	/// <paramref name="offset"></paramref> and (<paramref name="offset"></paramref> + <paramref name="count"></paramref> - 1)
+	/// replaced by the characters read from the current stream.
+	/// </param>
+	/// <param name="offset">The zero-based byte offset in <paramref name="buffer"/> at which to begin storing data from the current stream.</param>
+	/// <param name="count">The maximum number of bytes to read.</param>
+	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+	/// <returns>The total number of bytes written into the <paramref name="buffer"/>.</returns>
 	public async Task<int> ReadAtAsync(long position, byte[] buffer, int offset, int count, CancellationToken cancellationToken)
 	{
 		var (i, startPos) = GetChunkIndex(position);
@@ -381,6 +510,13 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 		return (int)bytesRead;
 	}
 
+	/// <summary>
+	/// Asynchronously reads a sequence of bytes from the given <paramref name="position"/> of the current stream.
+	/// </summary>
+	/// <param name="position">The position to begin reading from.</param>
+	/// <param name="buffer">The region of memory to write the data into.</param>
+	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+	/// <returns>The total number of bytes written into the <paramref name="buffer"/>.</returns>
 	public Task<int> ReadAtAsync(long position, Memory<byte> buffer, CancellationToken cancellationToken = default)
 	{
 		if (cancellationToken.IsCancellationRequested)
@@ -391,7 +527,7 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 			return
 				MemoryMarshal.TryGetArray(buffer, out ArraySegment<byte> destinationArray) ?
 					ReadAtAsync(position, destinationArray.Array!, destinationArray.Offset, destinationArray.Count, cancellationToken) :
-					throw new NotSupportedException("failed to get memory array");
+					throw new NotSupportedException("Failed to get memory array");
 		}
 		catch (OperationCanceledException oce)
 		{
@@ -453,34 +589,54 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 		return (-1, 0);
 	}
 
-	public override long Seek(long offset, SeekOrigin origin)
+	/// <summary>Sets the position within the current stream to the specified value.</summary>
+	/// <param name="offset">The new position within the stream. This is relative to the <paramref name="loc"/> parameter, and can be positive or negative.</param>
+	/// <param name="loc">A value of type <see cref="SeekOrigin"/>, which acts as the seek reference point.</param>
+	/// <returns>The new position within the stream, calculated by combining the initial reference point and the offset.</returns>
+	/// <exception cref="ArgumentException">There is an invalid <see cref="SeekOrigin"/>.</exception>
+	public override long Seek(long offset, SeekOrigin loc)
 	{
-		Position = origin switch
+		Position = loc switch
 		{
 			SeekOrigin.Begin => offset,
 			SeekOrigin.Current => offset + _position,
 			SeekOrigin.End => Length + offset,
-			_ => throw new ArgumentOutOfRangeException(nameof(offset), offset, null)
+			_ => throw new ArgumentException("Invalid loc", nameof(loc))
 		};
 		return _position;
 	}
-
+	
+	/// <summary>Not supported</summary>
 	public override void SetLength(long value)
 		=> throw new NotSupportedException();
+	/// <summary>Not supported</summary>
 	public override void Write(byte[] buffer, int offset, int count)
 		=> throw new NotSupportedException();
+	/// <summary>Not supported</summary>
 	public override void Flush()
 		=> throw new NotSupportedException();
 }
 
-public class SaveProgressChangedEventArgs : ProgressChangedEventArgs
+/// <summary>
+/// Event for save progress
+/// </summary>
+/// <typeparam name="TState">Type of <see cref="UserState"/></typeparam>
+public class SaveProgressChangedEventArgs<TState> : EventArgs
 {
-	internal SaveProgressChangedEventArgs(int progressPercentage, object? userState, long bytesSaved, long totalBytesToSave) : base(progressPercentage, userState)
+	internal SaveProgressChangedEventArgs(TState? userState, long bytesSaved, long totalBytesToSave, int progressPercentage)
 	{
+		UserState = userState;
 		BytesSaved = bytesSaved;
 		TotalBytesToSave = totalBytesToSave;
+		ProgressPercentage = progressPercentage;
 	}
- 
+
+	/// <summary/>
+	public TState? UserState { get; }
+	/// <summary/>
 	public long BytesSaved { get; }
+	/// <summary/>
 	public long TotalBytesToSave { get; }
+	/// <summary/>
+	public int ProgressPercentage { get; }
 }

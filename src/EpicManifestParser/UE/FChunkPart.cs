@@ -2,13 +2,22 @@
 
 namespace EpicManifestParser.UE;
 
+/// <summary>
+/// UE FChunkPart struct
+/// </summary>
 public readonly struct FChunkPart
 {
-	// The GUID of the chunk containing this part.
+	/// <summary>
+	/// The GUID of the chunk containing this part.
+	/// </summary>
 	public FGuid Guid { get; }
-	// The offset of the first byte into the chunk.
+	/// <summary>
+	/// The offset of the first byte into the chunk.
+	/// </summary>
 	public uint32 Offset { get; }
-	// The size of this part.
+	/// <summary>
+	/// The size of this part.
+	/// </summary>
 	public uint32 Size { get; }
 
 	internal FChunkPart(FGuid guid, uint32 offset, uint32 size)

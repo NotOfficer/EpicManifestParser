@@ -1,10 +1,15 @@
 ﻿using System.Net;
+
 using EpicManifestParser.Api;
+
 using ZlibngDotNet;
 
 namespace EpicManifestParser;
-
 // ReSharper disable UseSymbolAlias
+
+/// <summary>
+/// Options/Configuration for parsing manifests
+/// </summary>
 public class ManifestParseOptions
 {
 	/// <summary>
@@ -17,7 +22,7 @@ public class ManifestParseOptions
 	public string? ChunkBaseUrl { get; set; }
 
 	/// <summary>
-	/// Your own (optional) <see cref="HttpClient"/> used for downloading, must not have a <see cref="HttpClient.BaseAddress"/>
+	/// Your own (optional) <see cref="HttpClient"/> used for downloading, must not have a <see cref="HttpClient.BaseAddress"/> !
 	/// </summary>
 	public HttpClient? Client { get; set; }
 
@@ -32,20 +37,20 @@ public class ManifestParseOptions
 	public string? ChunkCacheDirectory { get; set; }
 
 	/// <summary>
-	/// Optional for caching manifests when using <see cref="ManifestInfo.DownloadAndParseAsync"/>.
+	/// Optional for caching manifests when using <see cref="ManifestInfo.DownloadAndParseAsync(ManifestParseOptions, Predicate&lt;ManifestInfoElement&gt;?, Predicate&lt;ManifestInfoElementManifest&gt;?, CancellationToken)"/>.
 	/// </summary>
 	public string? ManifestCacheDirectory { get; set; }
 
 	/// <summary>
-	/// Required for:
-	/// - deserializing compressed binary manifests
-	/// - downloading compressed chunks
+	/// Required for:<br/>
+	/// - deserializing compressed binary manifests<br/>
+	/// - downloading compressed chunks<br/>
 	/// </summary>
 	public Zlibng? Zlibng { get; set; }
 
 	internal void CreateDefaultClient()
 	{
-		Client ??= new HttpClient(new HttpClientHandler
+		Client ??= new HttpClient(new SocketsHttpHandler
 		{
 			UseCookies = false,
 			UseProxy = false,

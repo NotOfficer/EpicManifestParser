@@ -2,9 +2,18 @@
 
 namespace EpicManifestParser.UE;
 
+/// <summary>
+/// UE FCustomField struct
+/// </summary>
 public class FCustomField
 {
+	/// <summary>
+	/// Field name
+	/// </summary>
 	public string Name { get; internal set; } = "";
+	/// <summary>
+	/// Field value
+	/// </summary>
 	public string Value { get; internal set; } = "";
 
 	internal FCustomField() { }

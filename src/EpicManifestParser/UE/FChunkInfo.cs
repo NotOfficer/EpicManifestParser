@@ -9,6 +9,9 @@ using ZlibngDotNet;
 
 namespace EpicManifestParser.UE;
 
+/// <summary>
+/// UE FChunkInfo struct
+/// </summary>
 public class FChunkInfo
 {
 	/// <summary>
@@ -36,10 +39,20 @@ public class FChunkInfo
 	/// </summary>
 	public int64 FileSize { get; internal set; }
 
-	internal string? CachePath { get; set; }
+	/// <param name="manifest"></param>
+	/// <returns>
+	/// Url <see cref="string"/> to download this chunk
+	/// </returns>
+	public string GetUrl(FBuildPatchAppManifest manifest) =>
+		$"{manifest.Options.ChunkBaseUrl}{manifest.GetChunkSubdir()}/{GroupNumber:D2}/{Hash:X16}_{Guid}.chunk";
 
-	public Uri GetUri(FBuildPatchAppManifest manifest) =>
-		new($"{manifest.Options.ChunkBaseUrl}{manifest.GetChunkSubdir()}/{GroupNumber:D2}/{Hash:X16}_{Guid}.chunk", UriKind.Absolute);
+	/// <param name="manifest"></param>
+	/// <returns>
+	/// <see cref="Uri"/> to download this chunk
+	/// </returns>
+	public Uri GetUri(FBuildPatchAppManifest manifest) => new(GetUrl(manifest), UriKind.Absolute);
+
+	internal string? CachePath { get; set; }
 
 	internal static FChunkInfo[] ReadChunkDataList(GenericBufferReader reader, Dictionary<FGuid, FChunkInfo> chunksDict)
 	{
@@ -149,9 +162,11 @@ public class FChunkInfo
 		}
 
 		if (header.StoredAs.HasFlag(EChunkStorageFlags.Encrypted))
-			throw new NotSupportedException("encrypted chunks are not supported");
+			throw new NotSupportedException("Encrypted chunks are not supported");
 		if (!header.StoredAs.HasFlag(EChunkStorageFlags.Compressed))
-			throw new UnreachableException("unknown/new chunk ChunkStorageFlag");
+			throw new UnreachableException("Unknown/new chunk ChunkStorageFlag");
+		if (manifest.Options.Zlibng is null)
+			throw new InvalidOperationException("Chunk is compressed and zlib-ng instance was null");
 
 		// cant uncompress in-place
 		var poolBuffer = ArrayPool<byte>.Shared.Rent(header.DataSizeCompressed);
@@ -160,13 +175,13 @@ public class FChunkInfo
 		{
 			Unsafe.CopyBlockUnaligned(ref poolBuffer[0], ref destination[reader.Position], (uint)header.DataSizeCompressed);
 
-			var result = manifest.Options.Zlibng!.Uncompress(
+			var result = manifest.Options.Zlibng.Uncompress(
 				destination.AsSpan(0, header.DataSizeUncompressed),
 				poolBuffer.AsSpan(0, header.DataSizeCompressed),
 				out int bytesWritten);
 
 			if (result != ZlibngCompressionResult.Ok || bytesWritten != header.DataSizeUncompressed)
-				throw new FileLoadException("failed to uncompress chunk data");
+				throw new FileLoadException("Failed to uncompress chunk data");
 		}
 		finally
 		{
@@ -240,9 +255,9 @@ public class FChunkInfo
 			}
 
 			if (header.StoredAs.HasFlag(EChunkStorageFlags.Encrypted))
-				throw new NotSupportedException("encrypted chunks are not supported");
+				throw new NotSupportedException("Encrypted chunks are not supported");
 			if (!header.StoredAs.HasFlag(EChunkStorageFlags.Compressed))
-				throw new UnreachableException("unknown/new chunk ChunkStorageFlag");
+				throw new UnreachableException("Unknown/new chunk ChunkStorageFlag");
 
 			// cant seek for uncompress
 			uncompressPoolBuffer = ArrayPool<byte>.Shared.Rent(header.DataSizeUncompressed);
@@ -252,7 +267,7 @@ public class FChunkInfo
 				out int bytesWritten);
 
 			if (result != ZlibngCompressionResult.Ok || bytesWritten != header.DataSizeUncompressed)
-				throw new FileLoadException("failed to uncompress chunk data");
+				throw new FileLoadException("Failed to uncompress chunk data");
 
 			Unsafe.CopyBlockUnaligned(ref buffer[offset], ref uncompressPoolBuffer[chunkPartOffset], (uint)count);
 

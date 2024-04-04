@@ -1,13 +1,25 @@
 ﻿namespace EpicManifestParser.UE;
 
+/// <summary>
+/// UE EFileMetaFlags enum
+/// </summary>
 [Flags]
 public enum EFileMetaFlags : uint8
 {
+	/// <summary>
+	/// None
+	/// </summary>
 	None           = 0,
-	// Flag for readonly file.
+	/// <summary>
+	/// Flag for readonly file.
+	/// </summary>
 	ReadOnly       = 1,
-	// Flag for natively compressed.
+	/// <summary>
+	/// Flag for natively compressed.
+	/// </summary>
 	Compressed     = 1 << 1,
-	// Flag for unix executable.
+	/// <summary>
+	/// Flag for unix executable.
+	/// </summary>
 	UnixExecutable = 1 << 2
 }

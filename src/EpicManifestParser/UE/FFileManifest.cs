@@ -2,6 +2,9 @@
 
 namespace EpicManifestParser.UE;
 
+/// <summary>
+/// UE FFileManifest struct
+/// </summary>
 public class FFileManifest : IComparable<FFileManifest>, IComparable
 {
 	/// <summary>
@@ -37,7 +40,7 @@ public class FFileManifest : IComparable<FFileManifest>, IComparable
 	/// </summary>
 	public string MimeType { get; internal set; } = "";
 
-	public FBuildPatchAppManifest Manifest { get; internal set; } = null!;
+	internal FBuildPatchAppManifest Manifest { get; set; } = null!;
 
 	internal FFileManifest() { }
 
@@ -108,8 +111,13 @@ public class FFileManifest : IComparable<FFileManifest>, IComparable
 		return files;
 	}
 
+	/// <summary>
+	/// Creates a read-only stream to read filedata from
+	/// </summary>
+	/// <param name="cacheAsIs">Whether or not to cache the chunk as they were downloaded</param>
 	public FFileManifestStream GetStream(bool cacheAsIs = true) => new(this, cacheAsIs);
 
+	/// <inheritdoc />
 	public int CompareTo(FFileManifest? other)
 	{
 		if (ReferenceEquals(this, other)) return 0;
@@ -117,6 +125,7 @@ public class FFileManifest : IComparable<FFileManifest>, IComparable
 		return string.Compare(FileName, other.FileName, StringComparison.Ordinal);
 	}
 
+	/// <inheritdoc />
 	public int CompareTo(object? obj)
 	{
 		if (ReferenceEquals(null, obj)) return 1;
@@ -124,21 +133,25 @@ public class FFileManifest : IComparable<FFileManifest>, IComparable
 		return obj is FFileManifest other ? CompareTo(other) : throw new ArgumentException($"Object must be of type {nameof(FFileManifest)}");
 	}
 
+	/// <summary/>
 	public static bool operator <(FFileManifest? left, FFileManifest? right)
 	{
 		return Comparer<FFileManifest>.Default.Compare(left, right) < 0;
 	}
-
+	
+	/// <summary/>
 	public static bool operator >(FFileManifest? left, FFileManifest? right)
 	{
 		return Comparer<FFileManifest>.Default.Compare(left, right) > 0;
 	}
-
+	
+	/// <summary/>
 	public static bool operator <=(FFileManifest? left, FFileManifest? right)
 	{
 		return Comparer<FFileManifest>.Default.Compare(left, right) <= 0;
 	}
-
+	
+	/// <summary/>
 	public static bool operator >=(FFileManifest? left, FFileManifest? right)
 	{
 		return Comparer<FFileManifest>.Default.Compare(left, right) >= 0;

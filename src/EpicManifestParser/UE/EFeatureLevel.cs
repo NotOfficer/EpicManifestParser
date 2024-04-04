@@ -1,5 +1,8 @@
 ﻿namespace EpicManifestParser.UE;
 
+/// <summary>
+/// UE EFeatureLevel enum
+/// </summary>
 public enum EFeatureLevel
 {
 	/// <summary>
@@ -43,9 +46,12 @@ public enum EFeatureLevel
 	/// </summary>
 	StoredAsCompressedUClass,
 	/// <summary>
-	/// These two features were removed and never used.
+	/// Removed and never used.
 	/// </summary>
 	UNUSED_0,
+	/// <summary>
+	/// Removed and never used.
+	/// </summary>
 	UNUSED_1,
 	/// <summary>
 	/// Manifest stores chunk data SHA1 hash to use in place of data compare, for faster generation.
@@ -85,7 +91,7 @@ public enum EFeatureLevel
 	/// </summary>
 	Unknown2,
 	/// <summary>
-	/// Used by fortnite currently
+	/// Used for fortnite currently
 	/// </summary>
 	Unknown3,
 
