@@ -11,8 +11,8 @@ using EpicManifestParser.UE;
 
 using ZlibngDotNet;
 
-BenchmarkDotNet.Running.BenchmarkRunner.Run<Benchmarks>();
-return;
+//BenchmarkDotNet.Running.BenchmarkRunner.Run<Benchmarks>();
+//return;
 
 var client = new HttpClient(new HttpClientHandler
 {
@@ -64,17 +64,14 @@ Console.WriteLine(Math.Round(sw.Elapsed.TotalMilliseconds, 0));
 	await fileManifestStream.SaveFileAsync(Path.Combine(Benchmarks.DownloadsDir, fileManifestFileName));
 
 	var fileBuffer = await fileManifestStream.SaveBytesAsync();
-	FSHAHash.TryCompute(fileBuffer, out var hash1);
-	Console.WriteLine(hash1);
+	Console.WriteLine(FSHAHash.Compute(fileBuffer));
 
 	await fileManifestStream.SaveToAsync(new MemoryStream(fileBuffer, true), ProgressCallback, fileManifestFileName);
-	FSHAHash.TryCompute(fileBuffer, out var hash2);
-	Console.WriteLine(hash2);
+	Console.WriteLine(FSHAHash.Compute(fileBuffer));
 
-	static void ProgressCallback(SaveProgressChangedEventArgs eventArgs)
+	static void ProgressCallback(SaveProgressChangedEventArgs<string> eventArgs)
 	{
-		var fileName = (string)eventArgs.UserState!;
-		Console.WriteLine($"{fileName}: {eventArgs.ProgressPercentage}% ({eventArgs.BytesSaved}/{eventArgs.TotalBytesToSave})");
+		Console.WriteLine($"{eventArgs.UserState!}: {eventArgs.ProgressPercentage}% ({eventArgs.BytesSaved}/{eventArgs.TotalBytesToSave})");
 	}
 }
 
