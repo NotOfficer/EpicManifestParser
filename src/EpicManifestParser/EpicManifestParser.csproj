@@ -7,7 +7,7 @@
 
     <NeutralLanguage>en</NeutralLanguage>
     <Authors>NotOfficer</Authors>
-    <Description>A .NET parser &amp; downloader for EpicGames manifests.</Description>
+    <Description>A .NET parser &amp; downloader for EpicGames manifests</Description>
     <PackageTags>manifest parser, epicgames manifest parser</PackageTags>
     <RepositoryUrl>https://github.com/NotOfficer/EpicManifestParser</RepositoryUrl>
     <Copyright>Copyright (c) 2024 NotOfficer</Copyright>
@@ -16,9 +16,9 @@
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
     <PackageIcon>icon.png</PackageIcon>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <AssemblyVersion>2.2.0.0</AssemblyVersion>
-    <FileVersion>2.2.0.0</FileVersion>
-    <Version>2.2.0</Version>
+    <AssemblyVersion>2.2.1.0</AssemblyVersion>
+    <FileVersion>2.2.1.0</FileVersion>
+    <Version>2.2.1</Version>
   </PropertyGroup>
 
    <PropertyGroup>
