@@ -107,48 +107,51 @@ public class FChunkInfo
 		var shouldCache = manifest.Options.ChunkCacheDirectory is not null;
 		string? cachePath = null;
 
-		if (shouldCache)
+		if (CachePath is not null)
 		{
+			using var fileHandle = File.OpenHandle(CachePath);
+			fileSize = (int)RandomAccess.GetLength(fileHandle);
+			await RandomAccess.ReadAsync(fileHandle, destination.AsMemory(0, fileSize), 0, cancellationToken).ConfigureAwait(false);
+		}
+		else
+		{
+			using var _ = await manifest.ChunksLocker.LockAsync(Guid, cancellationToken).ConfigureAwait(false);
+
 			if (CachePath is not null)
 			{
 				using var fileHandle = File.OpenHandle(CachePath);
 				fileSize = (int)RandomAccess.GetLength(fileHandle);
 				await RandomAccess.ReadAsync(fileHandle, destination.AsMemory(0, fileSize), 0, cancellationToken).ConfigureAwait(false);
 			}
-
-			cachePath = Path.Combine(manifest.Options.ChunkCacheDirectory!, $"v2_{Hash:X16}_{Guid}.chunk");
-			if (File.Exists(cachePath))
+			else if (shouldCache)
 			{
-				CachePath = cachePath;
-				using var fileHandle = File.OpenHandle(CachePath);
-				fileSize = (int)RandomAccess.GetLength(fileHandle);
-				await RandomAccess.ReadAsync(fileHandle, destination.AsMemory(0, fileSize), 0, cancellationToken).ConfigureAwait(false);
-			}
-		}
-
-		if (fileSize == 0)
-		{
-			using var _ = await manifest.ChunksLocker.LockAsync(Guid, cancellationToken).ConfigureAwait(false);
-			if (shouldCache && File.Exists(cachePath))
-			{
-				CachePath = cachePath;
-				using var fileHandle = File.OpenHandle(CachePath);
-				fileSize = (int)RandomAccess.GetLength(fileHandle);
-				await RandomAccess.ReadAsync(fileHandle, destination.AsMemory(0, fileSize), 0, cancellationToken).ConfigureAwait(false);
+				cachePath = Path.Combine(manifest.Options.ChunkCacheDirectory!, $"v2_{Hash:X16}_{Guid}.chunk");
+				if (File.Exists(cachePath))
+				{
+					CachePath = cachePath;
+					using var fileHandle = File.OpenHandle(CachePath);
+					fileSize = (int)RandomAccess.GetLength(fileHandle);
+					await RandomAccess.ReadAsync(fileHandle, destination.AsMemory(0, fileSize), 0, cancellationToken).ConfigureAwait(false);
+				}
 			}
 
-			var uri = GetUri(manifest);
-			var destMs = new MemoryStream(destination, 0, destination.Length, true);
-			using var res = await manifest.Options.Client!.GetAsync(uri, cancellationToken).ConfigureAwait(false);
-			await res.Content.CopyToAsync(destMs, cancellationToken).ConfigureAwait(false);
-			fileSize = (int)destMs.Position;
-
-			if (shouldCache)
+			if (fileSize == 0)
 			{
-				using var fileHandle = File.OpenHandle(cachePath!, FileMode.Create, FileAccess.Write, FileShare.None, FileOptions.None, fileSize);
-				await RandomAccess.WriteAsync(fileHandle, new ReadOnlyMemory<byte>(destination, 0, fileSize), 0, cancellationToken).ConfigureAwait(false);
-				RandomAccess.FlushToDisk(fileHandle);
-				CachePath = cachePath;
+				var uri = GetUri(manifest);
+				var destMs = new MemoryStream(destination, 0, destination.Length, true);
+				using var res = await manifest.Options.Client!.GetAsync(uri, cancellationToken).ConfigureAwait(false);
+				await res.Content.CopyToAsync(destMs, cancellationToken).ConfigureAwait(false);
+				fileSize = (int)destMs.Position;
+
+				if (shouldCache)
+				{
+					using (var fileHandle = File.OpenHandle(cachePath!, FileMode.Create, FileAccess.Write, FileShare.None, FileOptions.None, fileSize))
+					{
+						await RandomAccess.WriteAsync(fileHandle, new ReadOnlyMemory<byte>(destination, 0, fileSize), 0, cancellationToken).ConfigureAwait(false);
+						RandomAccess.FlushToDisk(fileHandle);
+					}
+					CachePath = cachePath;
+				}
 			}
 		}
 
@@ -194,17 +197,24 @@ public class FChunkInfo
 	[SuppressMessage("ReSharper", "UseSymbolAlias")]
 	internal async Task<int> ReadDataAsync(byte[] buffer, int offset, int count, int chunkPartOffset, FBuildPatchAppManifest manifest, CancellationToken cancellationToken = default)
 	{
+		if (CachePath is not null)
+		{
+			using var fileHandle = File.OpenHandle(CachePath);
+			return await RandomAccess.ReadAsync(fileHandle, buffer.AsMemory(offset, count), chunkPartOffset, cancellationToken).ConfigureAwait(false);
+		}
+
+		using var _ = await manifest.ChunksLocker.LockAsync(Guid, cancellationToken).ConfigureAwait(false);
+
 		var shouldCache = manifest.Options.ChunkCacheDirectory is not null;
 		string? cachePath = null;
 
+		if (CachePath is not null)
+		{
+			using var fileHandle = File.OpenHandle(CachePath);
+			return await RandomAccess.ReadAsync(fileHandle, buffer.AsMemory(offset, count), chunkPartOffset, cancellationToken).ConfigureAwait(false);
+		}
 		if (shouldCache)
 		{
-			if (CachePath is not null)
-			{
-				using var fileHandle = File.OpenHandle(CachePath);
-				return await RandomAccess.ReadAsync(fileHandle, buffer.AsMemory(offset, count), chunkPartOffset, cancellationToken).ConfigureAwait(false);
-			}
-
 			cachePath = Path.Combine(manifest.Options.ChunkCacheDirectory!, $"{Hash:X16}_{Guid}.chunk");
 			if (File.Exists(cachePath))
 			{
@@ -212,14 +222,6 @@ public class FChunkInfo
 				using var fileHandle = File.OpenHandle(CachePath);
 				return await RandomAccess.ReadAsync(fileHandle, buffer.AsMemory(offset, count), chunkPartOffset, cancellationToken).ConfigureAwait(false);
 			}
-		}
-
-		using var _ = await manifest.ChunksLocker.LockAsync(Guid, cancellationToken).ConfigureAwait(false);
-		if (shouldCache && File.Exists(cachePath))
-		{
-			CachePath = cachePath;
-			using var fileHandle = File.OpenHandle(CachePath);
-			return await RandomAccess.ReadAsync(fileHandle, buffer.AsMemory(offset, count), chunkPartOffset, cancellationToken).ConfigureAwait(false);
 		}
 
 		byte[]? poolBuffer = null;
@@ -242,15 +244,14 @@ public class FChunkInfo
 			if (header.StoredAs == EChunkStorageFlags.None)
 			{
 				Unsafe.CopyBlockUnaligned(ref buffer[offset], ref poolBuffer[reader.Position + chunkPartOffset], (uint)count);
-
-				if (shouldCache)
+				if (!shouldCache)
+					return count;
+				using (var fileHandle = File.OpenHandle(cachePath!, FileMode.Create, FileAccess.Write, FileShare.None, FileOptions.None, header.DataSizeCompressed))
 				{
-					using var fileHandle = File.OpenHandle(cachePath!, FileMode.Create, FileAccess.Write, FileShare.None, FileOptions.None, header.DataSizeCompressed);
 					await RandomAccess.WriteAsync(fileHandle, new ReadOnlyMemory<byte>(poolBuffer, reader.Position, header.DataSizeCompressed), 0, cancellationToken).ConfigureAwait(false);
 					RandomAccess.FlushToDisk(fileHandle);
-					CachePath = cachePath;
 				}
-
+				CachePath = cachePath;
 				return count;
 			}
 
@@ -270,15 +271,14 @@ public class FChunkInfo
 				throw new FileLoadException("Failed to uncompress chunk data");
 
 			Unsafe.CopyBlockUnaligned(ref buffer[offset], ref uncompressPoolBuffer[chunkPartOffset], (uint)count);
-
-			if (shouldCache)
+			if (!shouldCache)
+				return count;
+			using (var fileHandle = File.OpenHandle(cachePath!, FileMode.Create, FileAccess.Write, FileShare.None, FileOptions.None, header.DataSizeUncompressed))
 			{
-				using var fileHandle = File.OpenHandle(cachePath!, FileMode.Create, FileAccess.Write, FileShare.None, FileOptions.None, header.DataSizeUncompressed);
 				await RandomAccess.WriteAsync(fileHandle, new ReadOnlyMemory<byte>(uncompressPoolBuffer, 0, header.DataSizeUncompressed), 0, cancellationToken).ConfigureAwait(false);
 				RandomAccess.FlushToDisk(fileHandle);
-				CachePath = cachePath;
 			}
-
+			CachePath = cachePath;
 			return count;
 		}
 		finally
