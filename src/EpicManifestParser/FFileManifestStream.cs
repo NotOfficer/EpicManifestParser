@@ -67,6 +67,7 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 		private readonly Action<SaveProgressChangedEventArgs<T>>? _callback;
 		private readonly long _totalBytesToSave;
 		private long _bytesSaved;
+		private int _lastProgress;
 
 		public DownloadState(SafeFileHandle destinationHandle, FBuildPatchAppManifest manifest, long totalBytesToSave, T? userState, Action<SaveProgressChangedEventArgs<T>>? callback)
 		{
@@ -97,8 +98,12 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 			{
 				_bytesSaved += amount;
 				var progress = (int)Math.Truncate((double)_bytesSaved / _totalBytesToSave * 100);
-				var eventArgs = new SaveProgressChangedEventArgs<T>(_userState, _bytesSaved, _totalBytesToSave, progress);
-				_callback(eventArgs);
+				if (progress != _lastProgress)
+				{
+					_lastProgress = progress;
+					var eventArgs = new SaveProgressChangedEventArgs<T>(_userState, _bytesSaved, _totalBytesToSave, progress);
+					_callback(eventArgs);
+				}
 			}
 		}
 	}
