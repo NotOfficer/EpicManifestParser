@@ -134,7 +134,8 @@ public class ManifestInfo
 	/// <returns>
 	/// The parsed <see cref="FBuildPatchAppManifest"/> manifest and the selected <see cref="ManifestInfoElement"/> info element in a <see cref="ValueTuple"/>
 	/// </returns>
-	/// <exception cref="InvalidOperationException"></exception>
+	/// <exception cref="InvalidOperationException">When a predicate fails.</exception>
+	/// <exception cref="HttpRequestException">When the manifest data fails to download.</exception>
 	public async Task<(FBuildPatchAppManifest Manifest, ManifestInfoElement InfoElement)> DownloadAndParseAsync(
 		ManifestParseOptions options, Predicate<ManifestInfoElement>? elementPredicate = null,
 		Predicate<ManifestInfoElementManifest>? elementManifestPredicate = null, CancellationToken cancellationToken = default)
@@ -188,7 +189,20 @@ public class ManifestInfo
 			}
 
 			options.CreateDefaultClient();
-			var manifestBuffer = await options.Client!.GetByteArrayAsync(manifestUri, cancellationToken).ConfigureAwait(false);
+			byte[] manifestBuffer;
+
+			try
+			{
+				manifestBuffer = await options.Client!.GetByteArrayAsync(manifestUri, cancellationToken).ConfigureAwait(false);
+			}
+			catch (HttpRequestException httpEx)
+			{
+				httpEx.Data.Add("ManifestUri", manifestUri);
+				httpEx.Data.Add("ElementManifest", elementManifest);
+				httpEx.Data.Add("Element", element);
+				throw;
+			}
+
 			var manifest = FBuildPatchAppManifest.Deserialize(manifestBuffer, options);
 
 			if (cachePath is not null)
