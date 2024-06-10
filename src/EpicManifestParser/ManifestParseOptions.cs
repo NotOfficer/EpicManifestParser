@@ -27,7 +27,7 @@ public class ManifestParseOptions
 	public HttpClient? Client { get; set; }
 
 	/// <summary>
-	/// Buffer size for downloading chunks, defaults to 2097152 bytes (2 MiB)
+	/// Buffer size for downloading chunks, defaults to 2097152 bytes (2 MiB).
 	/// </summary>
 	public int ChunkDownloadBufferSize { get; set; } = 2097152;
 
@@ -35,6 +35,11 @@ public class ManifestParseOptions
 	/// Optional for caching chunks, very recommended.
 	/// </summary>
 	public string? ChunkCacheDirectory { get; set; }
+
+	/// <summary>
+	/// Whether or not to cache the chunks 1:1 as they were downloaded.
+	/// </summary>
+	public bool CacheChunksAsIs { get; set; }
 
 	/// <summary>
 	/// Optional for caching manifests when using <see cref="ManifestInfo.DownloadAndParseAsync(ManifestParseOptions, Predicate&lt;ManifestInfoElement&gt;?, Predicate&lt;ManifestInfoElementManifest&gt;?, CancellationToken)"/>.

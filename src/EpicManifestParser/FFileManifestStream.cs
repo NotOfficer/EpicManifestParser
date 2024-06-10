@@ -46,7 +46,7 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 	/// <summary>Gets the file name of the <see cref="FFileManifest"/> represented by this stream</summary>
 	public string FileName => _fileManifest.FileName;
 
-	internal FFileManifestStream(FFileManifest fileManifest, bool cacheAsIs = true)
+	internal FFileManifestStream(FFileManifest fileManifest, bool cacheAsIs)
 	{
 		if (string.IsNullOrEmpty(fileManifest.Manifest.Options.ChunkBaseUrl))
 			throw new ArgumentException("Missing ChunkBaseUrl");
@@ -108,9 +108,8 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 		}
 	}
 
-	// TODO: make concurrent
 	/// <summary>
-	/// 
+	/// Asynchronously saves the current stream to another stream.
 	/// </summary>
 	/// <typeparam name="TState"></typeparam>
 	/// <param name="destination"></param>
@@ -118,7 +117,7 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 	/// <param name="userState"></param>
 	/// <param name="maxDegreeOfParallelism"></param>
 	/// <param name="cancellationToken"></param>
-	/// <returns></returns>
+	/// <returns>A task that represents the entire save operation.</returns>
 	public async Task SaveToAsync<TState>(Stream destination, Action<SaveProgressChangedEventArgs<TState>>? progressCallback,
 		TState? userState = default, int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
 	{
@@ -132,6 +131,8 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 				return;
 			}
 		}
+
+		// TODO: make concurrent
 
 		var downloadState = new DownloadState<TState>((byte[])null!, _fileManifest.Manifest, Length, userState, progressCallback);
 

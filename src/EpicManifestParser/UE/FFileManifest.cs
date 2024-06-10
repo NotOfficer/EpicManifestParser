@@ -36,7 +36,7 @@ public class FFileManifest : IComparable<FFileManifest>, IComparable
 	/// </summary>
 	public int64 FileSize { get; internal set; }
 	/// <summary>
-	/// The mime type
+	/// The mime type.
 	/// </summary>
 	public string MimeType { get; internal set; } = "";
 
@@ -112,10 +112,16 @@ public class FFileManifest : IComparable<FFileManifest>, IComparable
 	}
 
 	/// <summary>
-	/// Creates a read-only stream to read filedata from
+	/// Creates a read-only stream to read filedata from.
 	/// </summary>
-	/// <param name="cacheAsIs">Whether or not to cache the chunk as they were downloaded</param>
-	public FFileManifestStream GetStream(bool cacheAsIs = true) => new(this, cacheAsIs);
+	public FFileManifestStream GetStream() => new(this, Manifest.Options.CacheChunksAsIs);
+
+	/// <summary>
+	/// Creates a read-only stream to read filedata from.
+	/// </summary>
+	/// <param name="cacheAsIs">Whether or not to cache the chunks 1:1 as they were downloaded.</param>
+	public FFileManifestStream GetStream(bool cacheAsIs) => new(this, cacheAsIs);
+
 
 	/// <inheritdoc />
 	public int CompareTo(FFileManifest? other)
