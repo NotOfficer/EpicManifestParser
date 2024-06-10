@@ -155,14 +155,18 @@ public class ManifestInfo
 
 		if (options.ManifestCacheDirectory is not null)
 		{
-			var fileName =
-				elementManifest.Uri.OriginalString[(elementManifest.Uri.OriginalString.LastIndexOf('/') + 1)..];
-			cachePath = Path.Combine(options.ManifestCacheDirectory, fileName);
+			cachePath = Path.Join(options.ManifestCacheDirectory.AsSpan(), GetFileName(elementManifest.Uri));
 			if (File.Exists(cachePath))
 			{
 				var manifestBuffer = await File.ReadAllBytesAsync(cachePath, cancellationToken).ConfigureAwait(false);
 				var manifest = FBuildPatchAppManifest.Deserialize(manifestBuffer, options);
 				return (manifest, element);
+			}
+
+			static ReadOnlySpan<char> GetFileName(Uri uri)
+			{
+				var span = uri.OriginalString.AsSpan();
+				return span[(span.LastIndexOf('/') + 1)..];
 			}
 		}
 
@@ -173,7 +177,9 @@ public class ManifestInfo
 			{
 				var url = new Url(elementManifest.Uri);
 				foreach (var queryParam in elementManifest.QueryParams)
-					url.AppendQueryParam(queryParam.Name, queryParam.Value, NullValueHandling.NameOnly);
+				{
+					url.AppendQueryParam(queryParam.Name, queryParam.Value, true, NullValueHandling.NameOnly);
+				}
 				manifestUri = url.ToUri();
 			}
 			else
@@ -186,7 +192,9 @@ public class ManifestInfo
 			var manifest = FBuildPatchAppManifest.Deserialize(manifestBuffer, options);
 
 			if (cachePath is not null)
+			{
 				await File.WriteAllBytesAsync(cachePath, manifestBuffer, cancellationToken).ConfigureAwait(false);
+			}
 
 			return (manifest, element);
 		}
@@ -233,6 +241,7 @@ public class ManifestInfoElementManifestQueryParams
 	/// <summary/>
 	public required string Value { get; set; }
 }
+
 
 /// <summary>
 /// Source generated JSON parsers for <see cref="Api.ManifestInfo"/>
