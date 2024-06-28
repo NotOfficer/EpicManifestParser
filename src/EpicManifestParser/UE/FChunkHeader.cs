@@ -82,10 +82,10 @@ internal struct FChunkHeader
 						DataSizeUncompressed = reader.Read<int32>();
 					}
 				}
-                else
-                {
-                    DataSizeUncompressed = 1048576; // The default for all older versions is 1MB.
-                }
+				else
+				{
+					DataSizeUncompressed = 1048576; // The default for all older versions is 1MB.
+				}
 			}
 		}
 
