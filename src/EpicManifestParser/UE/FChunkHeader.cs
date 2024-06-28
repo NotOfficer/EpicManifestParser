@@ -1,4 +1,4 @@
-﻿using GenericReader;
+using GenericReader;
 
 namespace EpicManifestParser.UE;
 
@@ -82,6 +82,10 @@ internal struct FChunkHeader
 						DataSizeUncompressed = reader.Read<int32>();
 					}
 				}
+                else
+                {
+                    DataSizeUncompressed = 1048576; // The default for all older versions is 1MB.
+                }
 			}
 		}
 
