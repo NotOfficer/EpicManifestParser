@@ -1,4 +1,4 @@
-﻿using GenericReader;
+using GenericReader;
 
 namespace EpicManifestParser.UE;
 
@@ -63,6 +63,7 @@ internal struct FChunkHeader
 			//RollingHash = reader.Read<uint64>();
 			reader.Position += FGuid.Size + sizeof(uint64);
 			StoredAs = reader.Read<EChunkStorageFlags>();
+			DataSizeUncompressed = 1024 * 1024;
 
 			if (Version >= EChunkVersion.StoresShaAndHashType)
 			{
