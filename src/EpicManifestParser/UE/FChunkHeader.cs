@@ -25,7 +25,7 @@ internal struct FChunkHeader
 	/// <summary>
 	/// The size of this data uncompressed.
 	/// </summary>
-	public int32 DataSizeUncompressed = 1024 * 1024; // 1 MB is the default for all versions that do not store this explicitly
+	public int32 DataSizeUncompressed;
 	/// <summary>
 	/// How the chunk data is stored.
 	/// </summary>
@@ -63,6 +63,7 @@ internal struct FChunkHeader
 			//RollingHash = reader.Read<uint64>();
 			reader.Position += FGuid.Size + sizeof(uint64);
 			StoredAs = reader.Read<EChunkStorageFlags>();
+			DataSizeUncompressed = 1024 * 1024;
 
 			if (Version >= EChunkVersion.StoresShaAndHashType)
 			{
