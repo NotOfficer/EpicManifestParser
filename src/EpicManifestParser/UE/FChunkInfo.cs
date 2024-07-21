@@ -92,7 +92,10 @@ public class FChunkInfo
 		}
 		else
 		{
-			var defaultChunk = new FChunkInfo();
+			var defaultChunk = new FChunkInfo
+			{
+				WindowSize = 1048576
+			};
 			chunksSpan.Fill(defaultChunk);
 		}
 
