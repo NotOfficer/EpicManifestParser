@@ -72,7 +72,7 @@ public readonly struct FGuid : IEquatable<FGuid>, ISpanFormattable, IUtf8SpanFor
 	}
 
 	/// <summary>
-	/// Parses a FGuid from a string.
+	/// Parses a FGuid from a UTF8 string.
 	/// </summary>
 	/// <param name="utf8Guid">The UTF8 FGuid string.</param>
 	public FGuid(ReadOnlySpan<byte> utf8Guid)

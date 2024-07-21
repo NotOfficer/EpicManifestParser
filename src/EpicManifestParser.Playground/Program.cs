@@ -14,7 +14,7 @@ using ZlibngDotNet;
 //BenchmarkDotNet.Running.BenchmarkRunner.Run<Benchmarks>();
 //return;
 
-var client = new HttpClient(new HttpClientHandler
+var client = new HttpClient(new SocketsHttpHandler
 {
 	UseCookies = false,
 	UseProxy = false,
@@ -35,7 +35,8 @@ var options = new ManifestParseOptions
 	Client = client,
 	ChunkBaseUrl = "http://cloudflare.epicgamescdn.com/Builds/Fortnite/CloudDir/",
 	ChunkCacheDirectory = Directory.CreateDirectory(Path.Combine(Benchmarks.DownloadsDir, "chunks_v2")).FullName,
-	ManifestCacheDirectory = Directory.CreateDirectory(Path.Combine(Benchmarks.DownloadsDir, "manifests_v2")).FullName
+	ManifestCacheDirectory = Directory.CreateDirectory(Path.Combine(Benchmarks.DownloadsDir, "manifests_v2")).FullName,
+	CacheChunksAsIs = false
 };
 
 using var manifestResponse = await client.GetAsync("https://media.wtf/XlQk.json");
@@ -59,14 +60,17 @@ Console.WriteLine(Math.Round(sw.Elapsed.TotalMilliseconds, 0));
 	var fileManifest = manifest.FileManifestList.First(x =>
 		x.FileName.EndsWith("/pakchunk0optional-WindowsClient.ucas", StringComparison.Ordinal));
 	var fileManifestFileName = Path.GetFileName(fileManifest.FileName);
-	var fileManifestStream = fileManifest.GetStream(false);
+	var fileManifestStream = fileManifest.GetStream();
 
-	await fileManifestStream.SaveFileAsync(Path.Combine(Benchmarks.DownloadsDir, fileManifestFileName));
+	//await fileManifestStream.SaveFileAsync(Path.Combine(Benchmarks.DownloadsDir, fileManifestFileName));
 
-	var fileBuffer = await fileManifestStream.SaveBytesAsync();
-	Console.WriteLine(FSHAHash.Compute(fileBuffer));
+	//var fileBuffer = await fileManifestStream.SaveBytesAsync();
+	//Console.WriteLine(FSHAHash.Compute(fileBuffer));
 
-	await fileManifestStream.SaveToAsync(new MemoryStream(fileBuffer, true), ProgressCallback, fileManifestFileName);
+	sw.Restart();
+	var fileBuffer = new byte[fileManifest.FileSize];
+	await fileManifestStream.SaveToAsync(new MemoryStream(fileBuffer, 0, fileBuffer.Length, true, true), ProgressCallback, fileManifestFileName);
+	sw.Stop();
 	Console.WriteLine(FSHAHash.Compute(fileBuffer));
 
 	static void ProgressCallback(SaveProgressChangedEventArgs<string> eventArgs)
@@ -85,6 +89,7 @@ public class Benchmarks
 	public static string DownloadsDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
 
 	public static string ManifestPath = Path.Combine(DownloadsDir, "jDihDvwDD4VfI5Ss7Uy-BNIY91lqSw.manifest");
+	//public static string ManifestPath = Path.Combine(DownloadsDir, "valkyrie_cooked-content_adf941b2-4217-db8a-59f8-a3b791f884f5_30.20.34756525_v591_e6ae036b-f291-446f-b835-733cc15e7936_alt_plugin.manifest");
 	//public static string ManifestPath = Path.Combine(DownloadsDir, "apk_manifest.json");
 	//public static string ManifestPath = Path.Combine(DownloadsDir, "last_pc_manifest.json");
 	public static string ZlibngPath = Path.Combine(DownloadsDir, "zlib-ng2.dll");
@@ -121,7 +126,7 @@ public class Benchmarks
 		_filePath = Path.Combine(DownloadsDir, Path.GetFileName(fileManifest.FileName));
 		_fileBuffer = new byte[fileManifest.FileSize];
 		_fileMs = new MemoryStream(_fileBuffer, true);
-		_fileManifestStream1 = fileManifest.GetStream();
+		_fileManifestStream1 = fileManifest.GetStream(true);
 		_fileManifestStream2 = fileManifest.GetStream(false);
 	}
 

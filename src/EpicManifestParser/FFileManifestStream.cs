@@ -455,7 +455,7 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 
 			try
 			{
-				while (true)
+				while (i < _fileManifest.ChunkParts.Length)
 				{
 					var chunkPart = _fileManifest.ChunkParts[i];
 					var chunk = _fileManifest.Manifest.Chunks[chunkPart.Guid];
@@ -477,8 +477,7 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 					bytesRead += chunkBytes;
 					startPos = 0;
 
-					if (++i == _fileManifest.ChunkParts.Length)
-						break;
+					++i;
 				}
 			}
 			finally
@@ -488,7 +487,7 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 		}
 		else
 		{
-			while (true)
+			while (i < _fileManifest.ChunkParts.Length)
 			{
 				var chunkPart = _fileManifest.ChunkParts[i];
 				var chunk = _fileManifest.Manifest.Chunks[chunkPart.Guid];
@@ -508,8 +507,7 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 				bytesRead += (uint)chunkBytes;
 				startPos = 0;
 
-				if (++i == _fileManifest.ChunkParts.Length)
-					break;
+				++i;
 			}
 		}
 
