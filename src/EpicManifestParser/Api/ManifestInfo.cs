@@ -229,7 +229,7 @@ public class ManifestInfoElement
 	/// <summary/>
 	public bool UseSignedUrl { get; set; }
 	/// <summary/>
-	public Dictionary<string, string>? Metadata { get; set; }
+	public Dictionary<string, object>? Metadata { get; set; }
 	/// <summary/>
 	public required List<ManifestInfoElementManifest> Manifests { get; set; }
 
