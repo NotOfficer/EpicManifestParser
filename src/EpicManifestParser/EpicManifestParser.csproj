@@ -36,7 +36,7 @@
     <PackageReference Include="AsyncKeyedLock" Version="7.0.0" />
     <PackageReference Include="Flurl" Version="4.0.0" />
     <PackageReference Include="GenericReader" Version="2.1.2" />
-    <PackageReference Include="OffiUtils" Version="1.1.0" />
+    <PackageReference Include="OffiUtils" Version="1.2.0" />
     <PackageReference Include="Zlib-ng.NET" Version="1.0.1" />
   </ItemGroup>
 
