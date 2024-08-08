@@ -1,4 +1,5 @@
 ﻿using System.Buffers;
+using System.Collections;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -55,57 +56,6 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 
 		_fileManifest = fileManifest;
 		_cacheAsIs = cacheAsIs;
-	}
-
-	private class DownloadState<T>
-	{
-		public readonly byte[] DestinationBuffer;
-		public readonly SafeFileHandle DestinationHandle;
-		public readonly FBuildPatchAppManifest Manifest;
-
-		private readonly T? _userState;
-		private readonly Action<SaveProgressChangedEventArgs<T>>? _callback;
-		private readonly long _totalBytesToSave;
-		private long _bytesSaved;
-		private int _lastProgress;
-
-		public DownloadState(SafeFileHandle destinationHandle, FBuildPatchAppManifest manifest, long totalBytesToSave, T? userState, Action<SaveProgressChangedEventArgs<T>>? callback)
-		{
-			DestinationHandle = destinationHandle;
-			DestinationBuffer = null!;
-			Manifest = manifest;
-			_userState = userState;
-			_callback = callback;
-			_totalBytesToSave = totalBytesToSave;
-		}
-
-		public DownloadState(byte[] destinationBuffer, FBuildPatchAppManifest manifest, long totalBytesToSave, T? userState, Action<SaveProgressChangedEventArgs<T>>? callback)
-		{
-			DestinationBuffer = destinationBuffer;
-			DestinationHandle = null!;
-			Manifest = manifest;
-			_userState = userState;
-			_callback = callback;
-			_totalBytesToSave = totalBytesToSave;
-		}
-
-		public void OnBytesWritten(long amount)
-		{
-			if (_callback is null)
-				return;
-
-			lock (Manifest)
-			{
-				_bytesSaved += amount;
-				var progress = (int)Math.Truncate((double)_bytesSaved / _totalBytesToSave * 100);
-				if (progress != _lastProgress)
-				{
-					_lastProgress = progress;
-					var eventArgs = new SaveProgressChangedEventArgs<T>(_userState, _bytesSaved, _totalBytesToSave, progress);
-					_callback(eventArgs);
-				}
-			}
-		}
 	}
 
 	/// <summary>
@@ -208,17 +158,18 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 			MaxDegreeOfParallelism = maxDegreeOfParallelism,
 			CancellationToken = cancellationToken
 		};
-		await Parallel.ForEachAsync(EnumerateChunksWithOffset(downloadState), parallelOptions, _cacheAsIs ? SaveAsIsAsync : SaveAsync).ConfigureAwait(false);
+		var enumerable = new ChunksWithOffsetEnumerable<TState>(downloadState, _fileManifest);
+		await Parallel.ForEachAsync(enumerable, parallelOptions, _cacheAsIs ? SaveAsIsAsync : SaveAsync).ConfigureAwait(false);
 		return;
 
-		static async ValueTask SaveAsync<T>((DownloadState<T> State, FChunkInfo Chunk, uint ChunkPartOffset, uint ChunkPartSize, long Offset) tuple, CancellationToken token)
+		static async ValueTask SaveAsync<T>(ChunkWithOffset<T> tuple, CancellationToken token)
 		{
 			await tuple.Chunk.ReadDataAsync(tuple.State.DestinationBuffer, (int)tuple.Offset, (int)tuple.ChunkPartSize,
 				(int)tuple.ChunkPartOffset, tuple.State.Manifest, token).ConfigureAwait(false);
 			tuple.State.OnBytesWritten(tuple.ChunkPartSize);
 		}
 
-		static async ValueTask SaveAsIsAsync<T>((DownloadState<T> State, FChunkInfo Chunk, uint ChunkPartOffset, uint ChunkPartSize, long Offset) tuple, CancellationToken token)
+		static async ValueTask SaveAsIsAsync<T>(ChunkWithOffset<T> tuple, CancellationToken token)
 		{
 			var poolBuffer = ArrayPool<byte>.Shared.Rent(tuple.State.Manifest.Options.ChunkDownloadBufferSize);
 
@@ -278,19 +229,6 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 		return destination;
 	}
 
-	private IEnumerable<(DownloadState<T> State, FChunkInfo Chunk, uint ChunkPartOffset, uint ChunkPartSize, long Offset)>
-		EnumerateChunksWithOffset<T>(DownloadState<T> state)
-	{
-		var offset = 0L;
-
-		foreach (var fileChunkPart in _fileManifest.ChunkParts)
-		{
-			var chunk = _fileManifest.Manifest.Chunks[fileChunkPart.Guid];
-			yield return (state, chunk, fileChunkPart.Offset, fileChunkPart.Size, offset);
-			offset += fileChunkPart.Size;
-		}
-	}
-
 	/// <summary>
 	/// Asynchronously saves the current stream to a file.
 	/// </summary>
@@ -312,11 +250,12 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 			MaxDegreeOfParallelism = maxDegreeOfParallelism,
 			CancellationToken = cancellationToken
 		};
-		await Parallel.ForEachAsync(EnumerateChunksWithOffset(downloadState), parallelOptions, _cacheAsIs ? SaveAsIsAsync : SaveAsync).ConfigureAwait(false);
+		var enumerable = new ChunksWithOffsetEnumerable<TState>(downloadState, _fileManifest);
+		await Parallel.ForEachAsync(enumerable, parallelOptions, _cacheAsIs ? SaveAsIsAsync : SaveAsync).ConfigureAwait(false);
 		RandomAccess.FlushToDisk(destination);
 		return;
 
-		static async ValueTask SaveAsync<T>((DownloadState<T> State, FChunkInfo Chunk, uint ChunkPartOffset, uint ChunkPartSize, long Offset) tuple, CancellationToken token)
+		static async ValueTask SaveAsync<T>(ChunkWithOffset<T> tuple, CancellationToken token)
 		{
 			var poolBuffer = ArrayPool<byte>.Shared.Rent((int)tuple.ChunkPartSize);
 
@@ -335,7 +274,7 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 			}
 		}
 
-		static async ValueTask SaveAsIsAsync<T>((DownloadState<T> State, FChunkInfo Chunk, uint ChunkPartOffset, uint ChunkPartSize, long Offset) tuple, CancellationToken token)
+		static async ValueTask SaveAsIsAsync<T>(ChunkWithOffset<T> tuple, CancellationToken token)
 		{
 			var poolBuffer = ArrayPool<byte>.Shared.Rent(tuple.State.Manifest.Options.ChunkDownloadBufferSize);
 
@@ -643,4 +582,157 @@ public class SaveProgressChangedEventArgs<TState> : EventArgs
 	public long TotalBytesToSave { get; }
 	/// <summary/>
 	public int ProgressPercentage { get; }
+}
+
+internal class DownloadState<T>
+{
+	public readonly byte[] DestinationBuffer;
+	public readonly SafeFileHandle DestinationHandle;
+	public readonly FBuildPatchAppManifest Manifest;
+
+	private readonly T? _userState;
+	private readonly Action<SaveProgressChangedEventArgs<T>>? _callback;
+	private readonly long _totalBytesToSave;
+	private long _bytesSaved;
+	private int _lastProgress;
+
+	public DownloadState(SafeFileHandle destinationHandle, FBuildPatchAppManifest manifest, long totalBytesToSave, T? userState, Action<SaveProgressChangedEventArgs<T>>? callback)
+	{
+		DestinationHandle = destinationHandle;
+		DestinationBuffer = null!;
+		Manifest = manifest;
+		_userState = userState;
+		_callback = callback;
+		_totalBytesToSave = totalBytesToSave;
+	}
+
+	public DownloadState(byte[] destinationBuffer, FBuildPatchAppManifest manifest, long totalBytesToSave, T? userState, Action<SaveProgressChangedEventArgs<T>>? callback)
+	{
+		DestinationBuffer = destinationBuffer;
+		DestinationHandle = null!;
+		Manifest = manifest;
+		_userState = userState;
+		_callback = callback;
+		_totalBytesToSave = totalBytesToSave;
+	}
+
+	public void OnBytesWritten(long amount)
+	{
+		if (_callback is null)
+			return;
+
+		lock (Manifest)
+		{
+			_bytesSaved += amount;
+			var progress = (int)Math.Truncate((double)_bytesSaved / _totalBytesToSave * 100);
+			if (progress != _lastProgress)
+			{
+				_lastProgress = progress;
+				var eventArgs = new SaveProgressChangedEventArgs<T>(_userState, _bytesSaved, _totalBytesToSave, progress);
+				_callback(eventArgs);
+			}
+		}
+	}
+}
+
+internal struct ChunkWithOffset<T>
+{
+	public DownloadState<T> State;
+	public FChunkInfo Chunk;
+	public uint ChunkPartOffset;
+	public uint ChunkPartSize;
+	public long Offset;
+
+	public ChunkWithOffset(DownloadState<T> state, FChunkInfo chunk, uint chunkPartOffset, uint chunkPartSize, long offset)
+	{
+		State = state;
+		Chunk = chunk;
+		ChunkPartOffset = chunkPartOffset;
+		ChunkPartSize = chunkPartSize;
+		Offset = offset;
+	}
+}
+
+internal readonly struct ChunksWithOffsetEnumerable<T> : IEnumerable<ChunkWithOffset<T>>
+{
+	private readonly DownloadState<T> _state;
+	private readonly FFileManifest _fileManifest;
+
+	public ChunksWithOffsetEnumerable(DownloadState<T> state, FFileManifest fileManifest)
+	{
+		_state = state;
+		_fileManifest = fileManifest;
+	}
+
+	public IEnumerator<ChunkWithOffset<T>> GetEnumerator()
+	{
+		return new ChunksWithOffsetEnumerator<T>(_state, _fileManifest);
+	}
+
+	IEnumerator IEnumerable.GetEnumerator()
+	{
+		return GetEnumerator();
+	}
+}
+
+//private IEnumerable<(DownloadState<T> State, FChunkInfo Chunk, uint ChunkPartOffset, uint ChunkPartSize, long Offset)>
+//	EnumerateChunksWithOffset<T>(DownloadState<T> state)
+//{
+//	var offset = 0L;
+
+//	foreach (var fileChunkPart in _fileManifest.ChunkParts)
+//	{
+//		var chunk = _fileManifest.Manifest.Chunks[fileChunkPart.Guid];
+//		yield return (state, chunk, fileChunkPart.Offset, fileChunkPart.Size, offset);
+//		offset += fileChunkPart.Size;
+//	}
+//}
+
+internal struct ChunksWithOffsetEnumerator<T> : IEnumerator<ChunkWithOffset<T>>
+{
+	private readonly DownloadState<T> _state;
+	private readonly FFileManifest _fileManifest;
+	private long _offset;
+	private long _lastSize;
+	private int _chunkpartIndex;
+
+	public ChunksWithOffsetEnumerator(DownloadState<T> state, FFileManifest fileManifest)
+	{
+		_state = state;
+		_fileManifest = fileManifest;
+		_offset = 0;
+		_chunkpartIndex = -1;
+	}
+
+	public bool MoveNext()
+	{
+		_chunkpartIndex++;
+		if (_chunkpartIndex >= _fileManifest.ChunkParts.Length)
+			return false;
+
+		_offset += _lastSize;
+		var chunkPart = _fileManifest.ChunkParts[_chunkpartIndex];
+		_lastSize = chunkPart.Size;
+		return true;
+	}
+
+	public void Reset()
+	{
+		_offset = 0;
+		_chunkpartIndex = -1;
+	}
+
+	public ChunkWithOffset<T> Current
+	{
+		get
+		{
+			var chunkPart = _fileManifest.ChunkParts[_chunkpartIndex];
+			var chunk = _fileManifest.Manifest.Chunks[chunkPart.Guid];
+			return new ChunkWithOffset<T>(_state, chunk, chunkPart.Offset, chunkPart.Size, _offset);
+		}
+	}
+
+	object IEnumerator.Current => Current;
+
+	public readonly void Dispose() { }
 }
