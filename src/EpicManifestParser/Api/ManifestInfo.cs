@@ -271,8 +271,7 @@ public partial class EpicManifestParserJsonContext : JsonSerializerContext;
 public static partial class ManifestExtensions
 {
 	[GeneratedRegex(@"(\d+(?:\.\d+)+)-CL-(\d+)", RegexOptions.Singleline | RegexOptions.IgnoreCase)]
-	internal static partial Regex VersionAndClRegexGen();
-	internal static Regex VersionAndClRegex = VersionAndClRegexGen();
+	internal static partial Regex VersionAndClRegex();
 
 	/// <summary>
 	/// Attempts to parse <paramref name="version"/> and <paramref name="cl"/> from the <paramref name="buildVersion"/>.
@@ -288,7 +287,7 @@ public static partial class ManifestExtensions
 		if (string.IsNullOrEmpty(buildVersion))
 			return false;
 
-		var match = VersionAndClRegex.Match(buildVersion);
+		var match = VersionAndClRegex().Match(buildVersion);
 		if (!match.Success)
 			return false;
 

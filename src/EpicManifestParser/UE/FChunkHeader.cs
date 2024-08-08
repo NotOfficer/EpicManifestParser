@@ -59,9 +59,11 @@ internal struct FChunkHeader
 			Version = reader.Read<EChunkVersion>();
 			HeaderSize = reader.Read<int32>();
 			DataSizeCompressed = reader.Read<int32>();
+
 			//Guid = reader.Read<FGuid>();
 			//RollingHash = reader.Read<uint64>();
 			reader.Position += FGuid.Size + sizeof(uint64);
+
 			StoredAs = reader.Read<EChunkStorageFlags>();
 			DataSizeUncompressed = 1024 * 1024;
 

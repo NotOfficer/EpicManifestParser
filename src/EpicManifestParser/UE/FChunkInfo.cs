@@ -265,8 +265,9 @@ public class FChunkInfo
 			if (manifest.Options.Zlibng is null)
 				throw new InvalidOperationException("Chunk is compressed and zlib-ng instance was null");
 
-			// cant seek for uncompress
+			// cant seek for uncompression
 			uncompressPoolBuffer = ArrayPool<byte>.Shared.Rent(header.DataSizeUncompressed);
+
 			var result = manifest.Options.Zlibng.Uncompress(
 				uncompressPoolBuffer.AsSpan(0, header.DataSizeUncompressed),
 				poolBuffer.AsSpan(reader.Position, header.DataSizeCompressed),

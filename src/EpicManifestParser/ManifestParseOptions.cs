@@ -13,11 +13,11 @@ namespace EpicManifestParser;
 public class ManifestParseOptions
 {
 	/// <summary>
-	/// Required for downloading, must end with a slash!
+	/// Required for downloading, must have a leading slash!
 	/// </summary>
 	/// <remarks>
 	/// Example: <code>http://epicgames-download1.akamaized.net/Builds/Fortnite/CloudDir/</code><br/>
-	/// Distributionpoints can be found here: <see href="https://launcher-public-service-prod06.ol.epicgames.com/launcher/api/public/distributionpoints">here</see>
+	/// Distributionpoints can be found here: <see href="https://launcher-public-service-prod06.ol.epicgames.com/launcher/api/public/distributionpoints">here.</see>
 	/// </remarks>
 	public string? ChunkBaseUrl { get; set; }
 
@@ -55,13 +55,14 @@ public class ManifestParseOptions
 
 	internal void CreateDefaultClient()
 	{
-		Client ??= new HttpClient(new SocketsHttpHandler
+		var handler = new SocketsHttpHandler
 		{
 			UseCookies = false,
 			UseProxy = false,
 			AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip,
 			MaxConnectionsPerServer = 256
-		})
+		};
+		Client ??= new HttpClient(handler)
 		{
 			DefaultRequestVersion = new Version(1, 1),
 			DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact,
