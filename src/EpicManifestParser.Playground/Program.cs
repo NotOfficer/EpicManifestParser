@@ -11,8 +11,8 @@ using EpicManifestParser.UE;
 
 using ZlibngDotNet;
 
-BenchmarkDotNet.Running.BenchmarkRunner.Run<Benchmarks>();
-return;
+//BenchmarkDotNet.Running.BenchmarkRunner.Run<Benchmarks>();
+//return;
 
 var client = new HttpClient(new SocketsHttpHandler
 {
@@ -36,21 +36,12 @@ var options = new ManifestParseOptions
 {
 	Zlibng = zlibng,
 	Client = client,
-	ChunkBaseUrl = "http://fastly-download.epicgames.com/Builds/Fortnite/CloudDir/",
+	ChunkBaseUrl = "http://fastly-download.epicgames.com/Builds/Fortnite/Content/CloudDir/",
+	//ChunkBaseUrl = "http://fastly-download.epicgames.com/Builds/Fortnite/CloudDir/",
 	ChunkCacheDirectory = Directory.CreateDirectory(Path.Combine(Benchmarks.DownloadsDir, "chunks_v2")).FullName,
 	ManifestCacheDirectory = Directory.CreateDirectory(Path.Combine(Benchmarks.DownloadsDir, "manifests_v2")).FullName,
 	CacheChunksAsIs = false
 };
-
-{
-	var novaChunkBuffer = await client.GetByteArrayAsync(
-		//"https://cdn.novafn.dev/manifests/9.41/ChunksV3/18/33F4DEFF17219F9A_11373ED04B644D4936500DBDC7827DB1.chunk"
-		//"https://cdn.novafn.dev/manifests/9.41/ChunksV3/10/DB628ACE8BB54B01_4654498A4C6B6E8A26AE04AA37306C94.chunk"
-		"https://cdn.novafn.dev/manifests/9.41/ChunksV3/25/C26281FA9849DE67_DEA3FAE044ECCBE933FD6D824293B682.chunk"
-		);
-
-	FChunkInfo.Test(novaChunkBuffer, zlibng);
-}
 
 //using var manifestResponse = await client.GetAsync("https://media.wtf/XlQk.json");
 //var manifestInfo1 = await manifestResponse.Content.ReadManifestInfoAsync();
@@ -71,7 +62,8 @@ Console.WriteLine(Math.Round(sw.Elapsed.TotalMilliseconds, 0));
 
 {
 	var fileManifest = manifest.FileManifestList.First(x =>
-		x.FileName.EndsWith("/pakchunk0optional-WindowsClient.ucas", StringComparison.Ordinal));
+		x.FileName.EndsWith("/pakchunk0optional-iosclient.ucas", StringComparison.Ordinal));
+		//x.FileName.EndsWith("/pakchunk0optional-WindowsClient.ucas", StringComparison.Ordinal));
 	var fileManifestFileName = Path.GetFileName(fileManifest.FileName);
 	var fileManifestStream = fileManifest.GetStream();
 
@@ -102,7 +94,7 @@ public class Benchmarks
 {
 	public static string DownloadsDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
 
-	public static string ManifestPath = Path.Combine(DownloadsDir, "NYAK4exKX_9ELcGZ80eGnZOqTzLOXQ.manifest");
+	public static string ManifestPath = Path.Combine(DownloadsDir, "zUxlGW1Uzvkjpzf54UC194D82ZWAJQ.manifest");
 	public static string ZlibngPath = Path.Combine(DownloadsDir, "zlib-ng2.dll");
 	public static string ManifestInfoPath = Path.Combine(DownloadsDir, "manifestinfo.json");
 
