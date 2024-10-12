@@ -143,6 +143,7 @@ public class FChunkInfo
 				var uri = GetUri(manifest);
 				var destMs = new MemoryStream(destination, 0, destination.Length, true);
 				using var res = await manifest.Options.Client!.GetAsync(uri, cancellationToken).ConfigureAwait(false);
+				res.EnsureSuccessStatusCode();
 				await res.Content.CopyToAsync(destMs, cancellationToken).ConfigureAwait(false);
 				fileSize = (int)destMs.Position;
 

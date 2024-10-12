@@ -24,7 +24,7 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 	public override bool CanRead => true;
 	/// <summary>Always <see langword="true"/></summary>
 	public override bool CanSeek => true;
-	/// <summary>Always <see langword="true"/></summary>
+	/// <summary>Always <see langword="false"/></summary>
 	public override bool CanWrite => false;
 	/// <summary>Gets the length/size of the stream</summary>
 	public override long Length => _fileManifest.FileSize;

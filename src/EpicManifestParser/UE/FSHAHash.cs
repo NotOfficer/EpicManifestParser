@@ -120,9 +120,9 @@ public readonly struct FSHAHash : IEquatable<FSHAHash>, ISpanFormattable
 	/// <exception cref="FormatException">If an invalid format is used.</exception>
 	public bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format, IFormatProvider? provider)
 	{
-		if (format.Length == 0 || format == "X")
+		if (format.Length == 0 || format is "X")
 			return StringUtils.TryWriteBytesToHexUpper(AsSpan(), destination, out charsWritten);
-		if (format == "x")
+		if (format is "x")
 			return StringUtils.TryWriteBytesToHexLower(AsSpan(), destination, out charsWritten);
 		throw new FormatException("the provided format is not valid");
 	}
