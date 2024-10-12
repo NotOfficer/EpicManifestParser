@@ -55,6 +55,9 @@ public class ManifestParseOptions
 
 	internal void CreateDefaultClient()
 	{
+		if (Client is not null)
+			return;
+
 		var handler = new SocketsHttpHandler
 		{
 			UseCookies = false,
@@ -62,11 +65,14 @@ public class ManifestParseOptions
 			AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip,
 			MaxConnectionsPerServer = 256
 		};
-		Client ??= new HttpClient(handler)
+		Client = new HttpClient(handler)
 		{
 			DefaultRequestVersion = new Version(1, 1),
 			DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact,
 			Timeout = TimeSpan.FromSeconds(30)
 		};
+		Client.DefaultRequestHeaders.Accept.ParseAdd("*/*");
+		Client.DefaultRequestHeaders.UserAgent.ParseAdd("EpicGamesLauncher/16.13.0-36938137+++Portal+Release-Live Windows/10.0.26100.1.256.64bit");
+		Client.DefaultRequestHeaders.ConnectionClose = false;
 	}
 }
