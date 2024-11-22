@@ -1,4 +1,4 @@
-using GenericReader;
+using System.Runtime.CompilerServices;
 
 namespace EpicManifestParser.UE;
 
@@ -43,7 +43,14 @@ internal struct FChunkHeader
 	/// </summary>
 	public FSHAHash SHAHash;*/
 
-	internal FChunkHeader(GenericBufferReader reader)
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal static FChunkHeader Parse(ManifestData data)
+	{
+		var reader = new ManifestReader(data);
+		return new FChunkHeader(ref reader);
+	}
+
+	internal FChunkHeader(ref ManifestReader reader)
 	{
 		var startPos = reader.Position;
 		var archiveSizeLeft = reader.Length - startPos;

@@ -1,6 +1,4 @@
-﻿using GenericReader;
-
-namespace EpicManifestParser.UE;
+﻿namespace EpicManifestParser.UE;
 
 /// <summary>
 /// UE FChunkPart struct
@@ -27,7 +25,7 @@ public readonly struct FChunkPart
 		Size = size;
 	}
 
-	internal FChunkPart(IGenericReader reader)
+	internal FChunkPart(ref ManifestReader reader)
 	{
 		var startPos = reader.Position;
 		var dataSize = reader.Read<int32>();
@@ -38,4 +36,14 @@ public readonly struct FChunkPart
 
 		reader.Position = startPos + dataSize;
 	}
+
+#if NET9_0_OR_GREATER
+	internal static FChunkPart Read(ref ManifestReader reader) => new(ref reader);
+#else
+	internal static FChunkPart Read(GenericReader.IGenericReader genericReader)
+	{
+		var reader = (ManifestReader)genericReader;
+		return new FChunkPart(ref reader);
+	}
+#endif
 }

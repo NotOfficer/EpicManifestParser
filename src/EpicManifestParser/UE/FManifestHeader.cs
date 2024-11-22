@@ -1,6 +1,4 @@
-﻿using GenericReader;
-
-namespace EpicManifestParser.UE;
+﻿namespace EpicManifestParser.UE;
 
 internal class FManifestHeader
 {
@@ -31,7 +29,7 @@ internal class FManifestHeader
 	/// </summary>
 	public readonly FSHAHash SHAHash;
 
-	internal FManifestHeader(IGenericReader reader)
+	internal FManifestHeader(ref ManifestReader reader)
 	{
 		var magic = reader.Read<uint32>();
 		if (magic != Magic)

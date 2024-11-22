@@ -1,11 +1,9 @@
-﻿using GenericReader;
-
-namespace EpicManifestParser.UE;
+﻿namespace EpicManifestParser.UE;
 
 /// <summary>
 /// UE FFileManifest struct
 /// </summary>
-public class FFileManifest : IComparable<FFileManifest>, IComparable
+public sealed class FFileManifest : IComparable<FFileManifest>, IComparable
 {
 	/// <summary>
 	/// The build relative filename.
@@ -26,11 +24,12 @@ public class FFileManifest : IComparable<FFileManifest>, IComparable
 	/// <summary>
 	/// The install tags for this file.
 	/// </summary>
-	public string[] InstallTags { get; internal set; } = [];
+	public IReadOnlyList<string> InstallTags { get; internal set; } = [];
 	/// <summary>
 	/// The list of chunk parts to stitch.
 	/// </summary>
-	public FChunkPart[] ChunkParts { get; internal set; } = [];
+	public IReadOnlyList<FChunkPart> ChunkParts => ChunkPartsArray;
+	internal FChunkPart[] ChunkPartsArray = [];
 	/// <summary>
 	/// The size of this file.
 	/// </summary>
@@ -44,7 +43,7 @@ public class FFileManifest : IComparable<FFileManifest>, IComparable
 
 	internal FFileManifest() { }
 
-	internal static FFileManifest[] ReadFileDataList(GenericBufferReader reader, FBuildPatchAppManifest manifest)
+	internal static FFileManifest[] ReadFileDataList(ref ManifestReader reader, FBuildPatchAppManifest manifest)
 	{
 		var startPos = reader.Position;
 		var dataSize = reader.Read<int32>();
@@ -71,7 +70,7 @@ public class FFileManifest : IComparable<FFileManifest>, IComparable
 			for (var i = 0; i < elementCount; i++)
 				filesSpan[i].InstallTags = reader.ReadFStringArray();
 			for (var i = 0; i < elementCount; i++)
-				filesSpan[i].ChunkParts = reader.ReadArray(r => new FChunkPart(r));
+				filesSpan[i].ChunkPartsArray = reader.ReadArray(FChunkPart.Read);
 
 			// not to be found in UE, maybe fn specific?
 			if (dataVersion >= (EFileManifestListVersion)2)
@@ -94,7 +93,7 @@ public class FFileManifest : IComparable<FFileManifest>, IComparable
 				{
 					var file = filesSpan[i];
 					file.Manifest = manifest;
-					foreach (var chunkPart in file.ChunkParts)
+					foreach (var chunkPart in file.ChunkPartsArray.AsSpan())
 					{
 						file.FileSize += chunkPart.Size;
 					}

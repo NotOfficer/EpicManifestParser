@@ -98,7 +98,7 @@ public enum EFeatureLevel
 	/// <summary>
 	/// !! Always after the latest version entry, signifies the latest version plus 1 to allow the following Latest alias.
 	/// </summary>
-	LatestPlusOne,
+	LatestPlusOne = (UsesBuildTimeGeneratedBuildId + 1),
 	/// <summary>
 	/// An alias for the actual latest version value.
 	/// </summary>

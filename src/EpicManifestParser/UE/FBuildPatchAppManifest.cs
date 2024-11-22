@@ -8,8 +8,6 @@ using AsyncKeyedLock;
 
 using EpicManifestParser.Json;
 
-using GenericReader;
-
 using ZlibngDotNet;
 
 namespace EpicManifestParser.UE;
@@ -20,7 +18,7 @@ namespace EpicManifestParser.UE;
 public class FBuildPatchAppManifest
 {
 	/// <summary/>
-	public FManifestMeta ManifestMeta { get; internal set; } = null!;
+	public FManifestMeta Meta { get; internal set; } = null!;
 	/// <summary/>
 	public IReadOnlyList<FChunkInfo> ChunkDataList { get; internal set; } = null!;
 	/// <summary/>
@@ -43,7 +41,7 @@ public class FBuildPatchAppManifest
 	/// <summary>
 	/// Get the chunk sub-directory name
 	/// </summary>
-	public string GetChunkSubdir() => ManifestMeta.FeatureLevel switch
+	public string GetChunkSubdir() => Meta.FeatureLevel switch
 	{
 		> EFeatureLevel.StoredAsBinaryData => "ChunksV4",
 		> EFeatureLevel.StoresDataGroupNumbers => "ChunksV3",
@@ -54,12 +52,16 @@ public class FBuildPatchAppManifest
 	/// <summary>
 	/// Helper function to decide whether the passed in data is a JSON string we expect to deserialize a manifest from
 	/// </summary>
-	/// <param name="dataInput"></param>
-	public static bool IsJson(ReadOnlyMemory<byte> dataInput)
+	/// <returns><see langword="true"/> if the <paramref name="dataInput"/> is JSON; otherwise, <see langword="false"/>.</returns>
+	public static bool IsJson(ManifestRoData dataInput)
 	{
-		var span = dataInput.Span;
 		// The best we can do is look for the mandatory first character open curly brace,
 		// it will be within the first 4 characters (may have BOM)
+		var span = dataInput
+#if !NET9_0_OR_GREATER
+			.Span
+#endif
+			;
 		for (var idx = 0; idx < 4 && idx < span.Length; ++idx)
 		{
 			if (span[idx] == '{')
@@ -73,8 +75,8 @@ public class FBuildPatchAppManifest
 	/// <summary>
 	/// Deserializes a binary or JSON manifest
 	/// </summary>
-	/// <inheritdoc cref="DeserializeBinary(ReadOnlyMemory&lt;byte&gt;,Action&lt;ManifestParseOptions&gt;?)"/>
-	public static FBuildPatchAppManifest Deserialize(ReadOnlyMemory<byte> dataInput, Action<ManifestParseOptions>? optionsBuilder = null)
+	/// <inheritdoc cref="DeserializeBinary(ManifestRoData,Action{ManifestParseOptions}?)"/>
+	public static FBuildPatchAppManifest Deserialize(ManifestRoData dataInput, Action<ManifestParseOptions>? optionsBuilder = null)
 	{
 		var options = new ManifestParseOptions();
 		optionsBuilder?.Invoke(options);
@@ -84,9 +86,9 @@ public class FBuildPatchAppManifest
 	/// <summary>
 	/// Deserializes a JSON manifest
 	/// </summary>
-	/// <param name="dataInput">The memory to parse from</param>
+	/// <param name="dataInput">The span to parse from</param>
 	/// <param name="optionsBuilder">Builder for options/configuration to parse</param>
-	public static FBuildPatchAppManifest DeserializeJson(ReadOnlyMemory<byte> dataInput, Action<ManifestParseOptions>? optionsBuilder = null)
+	public static FBuildPatchAppManifest DeserializeJson(ManifestRoData dataInput, Action<ManifestParseOptions>? optionsBuilder = null)
 	{
 		var options = new ManifestParseOptions();
 		optionsBuilder?.Invoke(options);
@@ -96,13 +98,13 @@ public class FBuildPatchAppManifest
 	/// <summary>
 	/// Deserializes a binary manifest
 	/// </summary>
-	/// <param name="dataInput">The memory to parse from</param>
+	/// <param name="dataInput">The span to parse from</param>
 	/// <param name="optionsBuilder">Builder for options/configuration to parse</param>
 	/// <exception cref="NotSupportedException">Manifest is encrypted or older than <see cref="EFeatureLevel.StoredAsBinaryData"/></exception>
 	/// <exception cref="InvalidOperationException">Data is compressed and zlib-ng instance was null</exception>
 	/// <exception cref="FileLoadException">Error while parsing</exception>
 	/// <exception cref="InvalidDataException">Hashes do not match</exception>
-	public static FBuildPatchAppManifest DeserializeBinary(ReadOnlyMemory<byte> dataInput, Action<ManifestParseOptions>? optionsBuilder = null)
+	public static FBuildPatchAppManifest DeserializeBinary(ManifestRoData dataInput, Action<ManifestParseOptions>? optionsBuilder = null)
 	{
 		var options = new ManifestParseOptions();
 		optionsBuilder?.Invoke(options);
@@ -112,8 +114,8 @@ public class FBuildPatchAppManifest
 	/// <summary>
 	/// Deserializes a binary or JSON manifest
 	/// </summary>
-	/// <inheritdoc cref="DeserializeBinary(ReadOnlyMemory&lt;byte&gt;,ManifestParseOptions)"/>
-	public static FBuildPatchAppManifest Deserialize(ReadOnlyMemory<byte> dataInput, ManifestParseOptions options)
+	/// <inheritdoc cref="DeserializeBinary(ManifestRoData,ManifestParseOptions)"/>
+	public static FBuildPatchAppManifest Deserialize(ManifestRoData dataInput, ManifestParseOptions options)
 	{
 		return IsJson(dataInput) ? DeserializeJson(dataInput, options) : DeserializeBinary(dataInput, options);
 	}
@@ -121,11 +123,15 @@ public class FBuildPatchAppManifest
 	/// <summary>
 	/// Deserializes a JSON manifest
 	/// </summary>
-	/// <param name="dataInput">The memory to parse from</param>
+	/// <param name="dataInput">The span to parse from</param>
 	/// <param name="options">Options/Configuration to parse</param>
-	public static FBuildPatchAppManifest DeserializeJson(ReadOnlyMemory<byte> dataInput, ManifestParseOptions options)
+	public static FBuildPatchAppManifest DeserializeJson(ManifestRoData dataInput, ManifestParseOptions options)
 	{
-		var reader = JsonNode.Parse(dataInput.Span)!.AsObject();
+		var reader = JsonNode.Parse(dataInput
+#if !NET9_0_OR_GREATER
+			.Span
+#endif
+		)!.AsObject();
 
 		var featureLevel = reader["ManifestFileVersion"].GetBlob(EFeatureLevel.CustomFields);
 		if (featureLevel == EFeatureLevel.BrokenJsonVersion)
@@ -164,8 +170,8 @@ public class FBuildPatchAppManifest
 				SymlinkTarget = jsonFileManifest["SymlinkTarget"].GetString()
 			};
 			var jsonFileChunkParts = jsonFileManifest["FileChunkParts"]!.AsArray();
-			fileManifest.ChunkParts = new FChunkPart[jsonFileChunkParts.Count];
-			var chunkPartsSpan = fileManifest.ChunkParts.AsSpan();
+			fileManifest.ChunkPartsArray = new FChunkPart[jsonFileChunkParts.Count];
+			var chunkPartsSpan = fileManifest.ChunkPartsArray.AsSpan();
 			for (var j = 0; j < chunkPartsSpan.Length; j++)
 			{
 				var jsonFileChunkPart = jsonFileChunkParts[j]!;
@@ -314,7 +320,7 @@ public class FBuildPatchAppManifest
 
 		var manifest = new FBuildPatchAppManifest
 		{
-			ManifestMeta = meta,
+			Meta = meta,
 			ChunkDataList = chunkList,
 			FileManifestList = fileManifests,
 			CustomFields = customFields ?? [],
@@ -330,7 +336,7 @@ public class FBuildPatchAppManifest
 			{
 				var file = fileManifestsSpan[i];
 				file.Manifest = manifest;
-				foreach (var chunkPart in file.ChunkParts)
+				foreach (var chunkPart in file.ChunkPartsArray.AsSpan())
 				{
 					file.FileSize += chunkPart.Size;
 				}
@@ -340,42 +346,44 @@ public class FBuildPatchAppManifest
 		return manifest;
 	}
 
-	//inline unsigned int8* Align(const unsigned int8* Val, const uniform int Alignment)
-	//{
-	//	return (unsigned int8*)(((unsigned int64)Val + Alignment - 1) & ~(Alignment - 1));
-	//}
-
 	/// <summary>
 	/// Deserializes a binary manifest
 	/// </summary>
-	/// <param name="dataInput">The memory to parse from</param>
+	/// <param name="dataInput">The span to parse from</param>
 	/// <param name="options">Options/Configuration to parse</param>
 	/// <exception cref="NotSupportedException">Manifest is encrypted or older than <see cref="EFeatureLevel.StoredAsBinaryData"/></exception>
 	/// <exception cref="InvalidOperationException">Data is compressed and zlib-ng instance was null</exception>
 	/// <exception cref="FileLoadException">Error while parsing</exception>
 	/// <exception cref="InvalidDataException">Hashes do not match</exception>
-	public static FBuildPatchAppManifest DeserializeBinary(ReadOnlyMemory<byte> dataInput, ManifestParseOptions options)
+	public static FBuildPatchAppManifest DeserializeBinary(ManifestRoData dataInput, ManifestParseOptions options)
 	{
-		var fileReader = new GenericBufferReader(dataInput);
+		var fileReader = new ManifestReader(dataInput);
 		byte[]? manifestRawDataBuffer = null;
 
 		try
 		{
-			var header = new FManifestHeader(fileReader);
+			var header = new FManifestHeader(ref fileReader);
 
 			if (header.Version < EFeatureLevel.StoredAsBinaryData)
 				throw new NotSupportedException("Manifests below feature level StoredAsBinaryData are not supported");
 			if (header.StoredAs.HasFlag(EManifestStorageFlags.Encrypted))
 				throw new NotSupportedException("Encrypted manifests are not supported");
-			if (header.StoredAs.HasFlag(EManifestStorageFlags.Compressed) && options.Zlibng is null)
-				throw new InvalidOperationException("Data is compressed and zlib-ng instance was null");
+			if (header.StoredAs.HasFlag(EManifestStorageFlags.Compressed) && options.Decompressor is null)
+				throw new InvalidOperationException("Data is compressed and decompressor delegate was null");
 
-			Memory<byte> manifestRawData;
+			ManifestData manifestRawData;
 
 			if (header.StoredAs.HasFlag(EManifestStorageFlags.Compressed))
 			{
 				manifestRawDataBuffer = ArrayPool<byte>.Shared.Rent(header.DataSizeCompressed + header.DataSizeUncompressed);
-				manifestRawData = manifestRawDataBuffer.AsMemory(header.DataSizeCompressed, header.DataSizeUncompressed);
+				manifestRawData = manifestRawDataBuffer
+#if NET9_0_OR_GREATER
+					.AsSpan
+#else
+					.AsMemory
+#endif
+						(header.DataSizeCompressed, header.DataSizeUncompressed);
+
 				var manifestCompressedData = manifestRawDataBuffer.AsSpan(0, header.DataSizeCompressed);
 				fileReader.Read(manifestCompressedData);
 
@@ -386,26 +394,43 @@ public class FBuildPatchAppManifest
 			else if (header.StoredAs == EManifestStorageFlags.None)
 			{
 				manifestRawDataBuffer = ArrayPool<byte>.Shared.Rent(header.DataSizeCompressed);
-				manifestRawData = manifestRawDataBuffer.AsMemory(0, header.DataSizeCompressed);
-				fileReader.Read(manifestRawData.Span);
+				manifestRawData = manifestRawDataBuffer
+#if NET9_0_OR_GREATER
+					.AsSpan
+#else
+					.AsMemory
+#endif
+						(0, header.DataSizeCompressed);
+				fileReader.Read(manifestRawData
+#if !NET9_0_OR_GREATER
+					.Span
+#endif
+				);
 			}
-			else throw new UnreachableException("Manifest has invalid or unknown storage flags");
+			else
+			{
+				throw new UnreachableException("Manifest has invalid or unknown storage flags");
+			}
 
-			var hash = FSHAHash.Compute(manifestRawData.Span);
+			var hash = FSHAHash.Compute(manifestRawData
+#if !NET9_0_OR_GREATER
+				.Span
+#endif
+			);
 			if (header.SHAHash != hash)
 				throw new InvalidDataException($"Hash does not match. expected: {header.SHAHash}, actual: {hash}");
 
-			var reader = new GenericBufferReader(manifestRawData);
+			var reader = new ManifestReader(manifestRawData);
 			var chunks = new Dictionary<FGuid, FChunkInfo>();
 			var manifest = new FBuildPatchAppManifest
 			{
 				Chunks = chunks,
 				Options = options
 			};
-			manifest.ManifestMeta = new FManifestMeta(reader);
-			manifest.ChunkDataList = FChunkInfo.ReadChunkDataList(reader, chunks);
-			manifest.FileManifestList = FFileManifest.ReadFileDataList(reader, manifest);
-			manifest.CustomFields = FCustomField.ReadCustomFields(reader);
+			manifest.Meta = new FManifestMeta(ref reader);
+			manifest.ChunkDataList = FChunkInfo.ReadChunkDataList(ref reader, chunks);
+			manifest.FileManifestList = FFileManifest.ReadFileDataList(ref reader, manifest);
+			manifest.CustomFields = FCustomField.ReadCustomFields(ref reader);
 			manifest.PostSetup();
 			return manifest;
 		}

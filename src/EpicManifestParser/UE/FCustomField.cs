@@ -1,11 +1,9 @@
-﻿using GenericReader;
-
-namespace EpicManifestParser.UE;
+﻿namespace EpicManifestParser.UE;
 
 /// <summary>
 /// UE FCustomField struct
 /// </summary>
-public class FCustomField
+public sealed class FCustomField
 {
 	/// <summary>
 	/// Field name
@@ -18,7 +16,7 @@ public class FCustomField
 
 	internal FCustomField() { }
 
-	internal static FCustomField[] ReadCustomFields(GenericBufferReader reader)
+	internal static FCustomField[] ReadCustomFields(ref ManifestReader reader)
 	{
 		var startPos = reader.Position;
 		var dataSize = reader.Read<int32>();

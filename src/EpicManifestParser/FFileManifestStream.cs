@@ -1,9 +1,6 @@
 ﻿using System.Buffers;
 using System.Collections;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-
-using EpicManifestParser.UE;
 
 using Microsoft.Win32.SafeHandles;
 
@@ -15,7 +12,7 @@ namespace EpicManifestParser;
 /// <summary>
 /// A stream representing a <see cref="FFileManifest"/>
 /// </summary>
-public class FFileManifestStream : Stream, IRandomAccessStream
+public sealed class FFileManifestStream : RandomAccessStream
 {
 	private readonly FFileManifest _fileManifest;
 	private readonly bool _cacheAsIs;
@@ -51,7 +48,7 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 	{
 		if (string.IsNullOrEmpty(fileManifest.Manifest.Options.ChunkBaseUrl))
 			throw new ArgumentException("Missing ChunkBaseUrl");
-		if (fileManifest.Manifest.ManifestMeta.bIsFileData)
+		if (fileManifest.Manifest.Meta.bIsFileData)
 			throw new NotSupportedException("File-data manifests are not supported");
 
 		_fileManifest = fileManifest;
@@ -92,7 +89,7 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 
 			try
 			{
-				foreach (var fileChunkPart in _fileManifest.ChunkParts)
+				foreach (var fileChunkPart in _fileManifest.ChunkPartsArray)
 				{
 					var chunk = _fileManifest.Manifest.Chunks[fileChunkPart.Guid];
 					await chunk.ReadDataAsIsAsync(poolBuffer, _fileManifest.Manifest, cancellationToken).ConfigureAwait(false);
@@ -112,7 +109,7 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 
 			try
 			{
-				foreach (var fileChunkPart in _fileManifest.ChunkParts)
+				foreach (var fileChunkPart in _fileManifest.ChunkPartsArray)
 				{
 					var chunk = _fileManifest.Manifest.Chunks[fileChunkPart.Guid];
 					await chunk.ReadDataAsync(poolBuffer, 0, (int)fileChunkPart.Size,
@@ -362,7 +359,7 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 	/// <param name="offset">The zero-based byte offset in <paramref name="buffer"/> at which to begin storing data from the current stream.</param>
 	/// <param name="count">The maximum number of bytes to read.</param>
 	/// <returns>The total number of bytes written into the <paramref name="buffer"/>.</returns>
-	public int ReadAt(long position, byte[] buffer, int offset, int count)
+	public override int ReadAt(long position, byte[] buffer, int offset, int count)
 	{
 		return ReadAtAsync(position, buffer, offset, count, CancellationToken.None).GetAwaiter().GetResult();
 	}
@@ -380,7 +377,7 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 	/// <param name="count">The maximum number of bytes to read.</param>
 	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
 	/// <returns>The total number of bytes written into the <paramref name="buffer"/>.</returns>
-	public async Task<int> ReadAtAsync(long position, byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+	public override async Task<int> ReadAtAsync(long position, byte[] buffer, int offset, int count, CancellationToken cancellationToken = default)
 	{
 		var (i, startPos) = GetChunkIndex(position);
 		if (i == -1)
@@ -394,9 +391,9 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 
 			try
 			{
-				while (i < _fileManifest.ChunkParts.Length)
+				while (i < _fileManifest.ChunkPartsArray.Length)
 				{
-					var chunkPart = _fileManifest.ChunkParts[i];
+					var chunkPart = _fileManifest.ChunkPartsArray[i];
 					var chunk = _fileManifest.Manifest.Chunks[chunkPart.Guid];
 
 					await chunk.ReadDataAsIsAsync(poolBuffer, _fileManifest.Manifest, cancellationToken).ConfigureAwait(false);
@@ -426,9 +423,9 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 		}
 		else
 		{
-			while (i < _fileManifest.ChunkParts.Length)
+			while (i < _fileManifest.ChunkPartsArray.Length)
 			{
-				var chunkPart = _fileManifest.ChunkParts[i];
+				var chunkPart = _fileManifest.ChunkPartsArray[i];
 				var chunk = _fileManifest.Manifest.Chunks[chunkPart.Guid];
 
 				var chunkOffset = (int)(chunkPart.Offset + startPos);
@@ -453,35 +450,6 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 		return (int)bytesRead;
 	}
 
-	/// <summary>
-	/// Asynchronously reads a sequence of bytes from the given <paramref name="position"/> of the current stream.
-	/// </summary>
-	/// <param name="position">The position to begin reading from.</param>
-	/// <param name="buffer">The region of memory to write the data into.</param>
-	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
-	/// <returns>The total number of bytes written into the <paramref name="buffer"/>.</returns>
-	public Task<int> ReadAtAsync(long position, Memory<byte> buffer, CancellationToken cancellationToken = default)
-	{
-		if (cancellationToken.IsCancellationRequested)
-			return Task.FromCanceled<int>(cancellationToken);
-
-		try
-		{
-			return
-				MemoryMarshal.TryGetArray(buffer, out ArraySegment<byte> destinationArray) ?
-					ReadAtAsync(position, destinationArray.Array!, destinationArray.Offset, destinationArray.Count, cancellationToken) :
-					throw new NotSupportedException("Failed to get memory array");
-		}
-		catch (OperationCanceledException oce)
-		{
-			return Task.FromCanceled<int>(oce.CancellationToken);
-		}
-		catch (Exception exception)
-		{
-			return Task.FromException<int>(exception);
-		}
-	}
-
 	private long _lastChunkPartPosition;
 	private uint _lastChunkPartSize;
 	private int _lastChunkPartIndex;
@@ -498,9 +466,9 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 
 			var chunkPartPosition = 0L;
 
-			for (var i = 0; i < _fileManifest.ChunkParts.Length; i++)
+			for (var i = 0; i < _fileManifest.ChunkPartsArray.Length; i++)
 			{
-				var chunkPart = _fileManifest.ChunkParts[i];
+				var chunkPart = _fileManifest.ChunkPartsArray[i];
 
 				if (chunkPartPosition >= position)
 				{
@@ -519,9 +487,9 @@ public class FFileManifestStream : Stream, IRandomAccessStream
 
 	private (int Index, uint ChunkPos) GetChunkIndex(long position)
 	{
-		for (var i = 0; i < _fileManifest.ChunkParts.Length; i++)
+		for (var i = 0; i < _fileManifest.ChunkPartsArray.Length; i++)
 		{
-			var chunkPart = _fileManifest.ChunkParts[i];
+			var chunkPart = _fileManifest.ChunkPartsArray[i];
 
 			if (position < chunkPart.Size)
 				return (i, (uint)position);
@@ -707,11 +675,11 @@ internal struct ChunksWithOffsetEnumerator<T> : IEnumerator<ChunkWithOffset<T>>
 	public bool MoveNext()
 	{
 		_chunkpartIndex++;
-		if (_chunkpartIndex >= _fileManifest.ChunkParts.Length)
+		if (_chunkpartIndex >= _fileManifest.ChunkPartsArray.Length)
 			return false;
 
 		_offset += _lastSize;
-		var chunkPart = _fileManifest.ChunkParts[_chunkpartIndex];
+		var chunkPart = _fileManifest.ChunkPartsArray[_chunkpartIndex];
 		_lastSize = chunkPart.Size;
 		return true;
 	}
@@ -726,7 +694,7 @@ internal struct ChunksWithOffsetEnumerator<T> : IEnumerator<ChunkWithOffset<T>>
 	{
 		get
 		{
-			var chunkPart = _fileManifest.ChunkParts[_chunkpartIndex];
+			var chunkPart = _fileManifest.ChunkPartsArray[_chunkpartIndex];
 			var chunk = _fileManifest.Manifest.Chunks[chunkPart.Guid];
 			return new ChunkWithOffset<T>(_state, chunk, chunkPart.Offset, chunkPart.Size, _offset);
 		}

@@ -3,8 +3,6 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
-using GenericReader;
-
 using ZlibngDotNet;
 
 namespace EpicManifestParser.UE;
@@ -12,7 +10,7 @@ namespace EpicManifestParser.UE;
 /// <summary>
 /// UE FChunkInfo struct
 /// </summary>
-public class FChunkInfo
+public sealed class FChunkInfo
 {
 	/// <summary>
 	/// The GUID for this data.
@@ -54,7 +52,7 @@ public class FChunkInfo
 
 	internal string? CachePath { get; set; }
 
-	internal static FChunkInfo[] ReadChunkDataList(GenericBufferReader reader, Dictionary<FGuid, FChunkInfo> chunksDict)
+	internal static FChunkInfo[] ReadChunkDataList(ref ManifestReader reader, Dictionary<FGuid, FChunkInfo> chunksDict)
 	{
 		var startPos = reader.Position;
 		var dataSize = reader.Read<int32>();
@@ -73,11 +71,7 @@ public class FChunkInfo
 				var chunk = new FChunkInfo();
 				chunk.Guid = reader.Read<FGuid>();
 				chunksSpan[i] = chunk;
-
 				chunksDict.Add(chunk.Guid, chunk);
-				//ref var lookupChunk = ref CollectionsMarshal.GetValueRefOrAddDefault(chunksDict, chunk.Guid, out var exists);
-				//if (!exists)
-				//	lookupChunk = chunk;
 			}
 			for (var i = 0; i < elementCount; i++)
 				chunksSpan[i].Hash = reader.Read<uint64>();
@@ -159,12 +153,11 @@ public class FChunkInfo
 			}
 		}
 
-		var reader = new GenericBufferReader(new Memory<byte>(destination, 0, fileSize));
-		var header = new FChunkHeader(reader);
+		var header = FChunkHeader.Parse(new ManifestData(destination, 0, fileSize));
 
 		if (header.StoredAs == EChunkStorageFlags.None)
 		{
-			Unsafe.CopyBlockUnaligned(ref destination[0], ref destination[reader.Position], (uint)header.DataSizeCompressed);
+			Unsafe.CopyBlockUnaligned(ref destination[0], ref destination[header.HeaderSize], (uint)header.DataSizeCompressed);
 			return header.DataSizeCompressed;
 		}
 
@@ -238,21 +231,20 @@ public class FChunkInfo
 			res.EnsureSuccessStatusCode();
 			var poolBufferSize = res.Content.Headers.ContentLength ?? manifest.Options.ChunkDownloadBufferSize;
 			poolBuffer = ArrayPool<byte>.Shared.Rent((int)poolBufferSize);
-			var destMs = new MemoryStream(poolBuffer, 0, poolBuffer.Length, true);
+			var destMs = new MemoryStream(poolBuffer, 0, poolBuffer.Length, true, true);
 			await res.Content.CopyToAsync(destMs, cancellationToken).ConfigureAwait(false);
 			var responseSize = (int)destMs.Length;
 
-			var reader = new GenericBufferReader(new Memory<byte>(poolBuffer, 0, responseSize));
-			var header = new FChunkHeader(reader);
+			var header = FChunkHeader.Parse(new ManifestData(poolBuffer, 0, responseSize));
 
 			if (header.StoredAs == EChunkStorageFlags.None)
 			{
-				Unsafe.CopyBlockUnaligned(ref buffer[offset], ref poolBuffer[reader.Position + chunkPartOffset], (uint)count);
+				Unsafe.CopyBlockUnaligned(ref buffer[offset], ref poolBuffer[header.HeaderSize + chunkPartOffset], (uint)count);
 				if (!shouldCache)
 					return count;
 				using (var fileHandle = File.OpenHandle(cachePath!, FileMode.Create, FileAccess.Write, FileShare.None, FileOptions.None, header.DataSizeCompressed))
 				{
-					await RandomAccess.WriteAsync(fileHandle, new ReadOnlyMemory<byte>(poolBuffer, reader.Position, header.DataSizeCompressed), 0, cancellationToken).ConfigureAwait(false);
+					await RandomAccess.WriteAsync(fileHandle, new ReadOnlyMemory<byte>(poolBuffer, header.HeaderSize, header.DataSizeCompressed), 0, cancellationToken).ConfigureAwait(false);
 					RandomAccess.FlushToDisk(fileHandle);
 				}
 				CachePath = cachePath;

@@ -1,11 +1,9 @@
-﻿using GenericReader;
-
-namespace EpicManifestParser.UE;
+﻿namespace EpicManifestParser.UE;
 
 /// <summary>
 /// UE FManifestMeta struct
 /// </summary>
-public class FManifestMeta
+public sealed class FManifestMeta
 {
 	/// <summary>
 	/// The feature level support this build was created with, regardless of the serialised format.
@@ -66,7 +64,7 @@ public class FManifestMeta
 	public string UninstallCommand { get; internal set; } = "";
 
 	internal FManifestMeta() { }
-	internal FManifestMeta(GenericBufferReader reader)
+	internal FManifestMeta(ref ManifestReader reader)
 	{
 		var startPos = reader.Position;
 		var dataSize = reader.Read<int32>();

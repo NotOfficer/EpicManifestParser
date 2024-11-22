@@ -53,10 +53,14 @@ public class ManifestParseOptions
 	/// </summary>
 	public Zlibng? Zlibng { get; set; }
 
-	internal void CreateDefaultClient()
+	/// <summary>
+	/// Creates a default <see cref="HttpClient"/> and also sets <see cref="Client"/> to its instance.
+	/// </summary>
+	/// <returns>The created <see cref="HttpClient"/>.</returns>
+	public HttpClient CreateDefaultClient()
 	{
 		if (Client is not null)
-			return;
+			return Client;
 
 		var handler = new SocketsHttpHandler
 		{
@@ -74,5 +78,6 @@ public class ManifestParseOptions
 		Client.DefaultRequestHeaders.Accept.ParseAdd("*/*");
 		Client.DefaultRequestHeaders.UserAgent.ParseAdd("EpicGamesLauncher/16.13.0-36938137+++Portal+Release-Live Windows/10.0.26100.1.256.64bit");
 		Client.DefaultRequestHeaders.ConnectionClose = false;
+		return Client;
 	}
 }
