@@ -5,27 +5,27 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 
-    <NeutralLanguage>en</NeutralLanguage>
-    <Authors>NotOfficer</Authors>
     <Description>A .NET parser &amp; downloader for EpicGames manifests</Description>
-    <PackageTags>manifest parser, epicgames manifest parser</PackageTags>
-    <RepositoryUrl>https://github.com/NotOfficer/EpicManifestParser</RepositoryUrl>
-    <Copyright>Copyright (c) 2024 NotOfficer</Copyright>
-    <RepositoryType>git</RepositoryType>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-    <PackageIcon>icon.png</PackageIcon>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageTags>manifest, epicgames, manifestparser</PackageTags>
     <AssemblyVersion>2.3.3.0</AssemblyVersion>
     <FileVersion>2.3.3.0</FileVersion>
     <Version>2.3.3</Version>
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="EpicManifestParser.Tests" />
     <InternalsVisibleTo Include="EpicManifestParser.Playground" />
   </ItemGroup>
 
-   <PropertyGroup>
+  <PropertyGroup>
+    <Authors>NotOfficer</Authors>
+    <Copyright>Copyright (c) 2024 NotOfficer</Copyright>
+    <NeutralLanguage>en</NeutralLanguage>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
@@ -33,8 +33,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="..\..\icon.png" Pack="true" PackagePath="" />
+    <None Include="..\..\icon.png" Pack="True" PackagePath="" Visible="False" />
   </ItemGroup>
+
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+  </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="AsyncKeyedLock" Version="7.1.4" />
