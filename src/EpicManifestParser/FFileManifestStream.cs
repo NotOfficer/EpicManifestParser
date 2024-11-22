@@ -58,15 +58,14 @@ public sealed class FFileManifestStream : RandomAccessStream
 	/// <summary>
 	/// Asynchronously saves the current stream to another stream.
 	/// </summary>
-	/// <typeparam name="TState"></typeparam>
-	/// <param name="destination"></param>
-	/// <param name="progressCallback"></param>
-	/// <param name="userState"></param>
-	/// <param name="maxDegreeOfParallelism"></param>
-	/// <param name="cancellationToken"></param>
+	/// <param name="destination">The destination stream.</param>
+	/// <param name="progressCallback">The progress change callback. (optional)</param>
+	/// <param name="userState">The user state for the <paramref name="progressCallback"/>. (optional)</param>
+	/// <param name="maxDegreeOfParallelism">The maximum number of concurrent tasks saving/downloading to the destination. (optional)</param>
+	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
 	/// <returns>A task that represents the entire save operation.</returns>
-	public async Task SaveToAsync<TState>(Stream destination, Action<SaveProgressChangedEventArgs<TState>>? progressCallback,
-		TState? userState = default, int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
+	public async Task SaveToAsync(Stream destination, Action<SaveProgressChangedEventArgs>? progressCallback,
+		object? userState = default, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
 	{
 		if (destination is MemoryStream {Position: 0} ms)
 		{
@@ -81,7 +80,7 @@ public sealed class FFileManifestStream : RandomAccessStream
 
 		// TODO: make concurrent
 
-		var downloadState = new DownloadState<TState>((byte[])null!, _fileManifest.Manifest, Length, userState, progressCallback);
+		var downloadState = new DownloadState((byte[])null!, _fileManifest.Manifest, Length, userState, progressCallback);
 
 		if (_cacheAsIs)
 		{
@@ -128,45 +127,44 @@ public sealed class FFileManifestStream : RandomAccessStream
 		await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
 	}
 
-	/// <inheritdoc cref="SaveToAsync{TState}"/>
-	public Task SaveToAsync(Stream destination, int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
+	/// <inheritdoc cref="SaveToAsync(Stream,Action{SaveProgressChangedEventArgs}?,object?,int?,CancellationToken)"/>
+	public Task SaveToAsync(Stream destination, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
 	{
-		return SaveToAsync<nint>(destination, null, 0, maxDegreeOfParallelism, cancellationToken);
+		return SaveToAsync(destination, null, 0, maxDegreeOfParallelism, cancellationToken);
 	}
 
 	/// <summary>
 	/// Asynchronously saves the current stream to a buffer.
 	/// </summary>
-	/// <typeparam name="TState">The type of the <paramref name="userState"/>.</typeparam>
 	/// <param name="destination">The destination buffer.</param>
 	/// <param name="progressCallback">The progress change callback. (optional)</param>
 	/// <param name="userState">The user state for the <paramref name="progressCallback"/>. (optional)</param>
-	/// <param name="maxDegreeOfParallelism">The maximum number of concurrent tasks saving/downloading to the destination.</param>
+	/// <param name="maxDegreeOfParallelism">The maximum number of concurrent tasks saving/downloading to the destination. (optional)</param>
 	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
 	/// <returns>A task that represents the entire save operation.</returns>
-	public async Task SaveBytesAsync<TState>(byte[] destination, Action<SaveProgressChangedEventArgs<TState>>? progressCallback,
-		TState? userState = default, int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
+	public async Task SaveBytesAsync(byte[] destination, Action<SaveProgressChangedEventArgs>? progressCallback,
+		object? userState = default, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
 	{
 		ArgumentOutOfRangeException.ThrowIfLessThan(destination.Length, Length);
 
-		var downloadState = new DownloadState<TState>(destination, _fileManifest.Manifest, Length, userState, progressCallback);
+		var downloadState = new DownloadState(destination, _fileManifest.Manifest, Length, userState, progressCallback);
 		var parallelOptions = new ParallelOptions
 		{
-			MaxDegreeOfParallelism = maxDegreeOfParallelism,
+			MaxDegreeOfParallelism = maxDegreeOfParallelism ?? Environment.ProcessorCount,
 			CancellationToken = cancellationToken
 		};
-		var enumerable = new ChunksWithOffsetEnumerable<TState>(downloadState, _fileManifest);
+		var enumerable = new ChunksWithOffsetEnumerable(downloadState, _fileManifest);
 		await Parallel.ForEachAsync(enumerable, parallelOptions, _cacheAsIs ? SaveAsIsAsync : SaveAsync).ConfigureAwait(false);
 		return;
 
-		static async ValueTask SaveAsync<T>(ChunkWithOffset<T> tuple, CancellationToken token)
+		static async ValueTask SaveAsync(ChunkWithOffset tuple, CancellationToken token)
 		{
 			await tuple.Chunk.ReadDataAsync(tuple.State.DestinationBuffer, (int)tuple.Offset, (int)tuple.ChunkPartSize,
 				(int)tuple.ChunkPartOffset, tuple.State.Manifest, token).ConfigureAwait(false);
 			tuple.State.OnBytesWritten(tuple.ChunkPartSize);
 		}
 
-		static async ValueTask SaveAsIsAsync<T>(ChunkWithOffset<T> tuple, CancellationToken token)
+		static async ValueTask SaveAsIsAsync(ChunkWithOffset tuple, CancellationToken token)
 		{
 			var poolBuffer = ArrayPool<byte>.Shared.Rent(tuple.State.Manifest.Options.ChunkDownloadBufferSize);
 
@@ -188,25 +186,24 @@ public sealed class FFileManifestStream : RandomAccessStream
 	/// Asynchronously saves the current stream to a buffer.
 	/// </summary>
 	/// <param name="destination">The destination buffer.</param>
-	/// <param name="maxDegreeOfParallelism">The maximum number of concurrent tasks saving/downloading to the destination.</param>
+	/// <param name="maxDegreeOfParallelism">The maximum number of concurrent tasks saving/downloading to the destination. (optional)</param>
 	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
 	/// <returns>A task that represents the entire save operation.</returns>
-	public Task SaveBytesAsync(byte[] destination, int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
+	public Task SaveBytesAsync(byte[] destination, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
 	{
-		return SaveBytesAsync<nint>(destination, null, 0, maxDegreeOfParallelism, cancellationToken);
+		return SaveBytesAsync(destination, null, 0, maxDegreeOfParallelism, cancellationToken);
 	}
 
 	/// <summary>
 	/// Asynchronously saves the current stream to a buffer.
 	/// </summary>
-	/// <typeparam name="TState">The type of the <paramref name="userState"/>.</typeparam>
 	/// <param name="progressCallback">The progress change callback. (optional)</param>
 	/// <param name="userState">The user state for the <paramref name="progressCallback"/>. (optional)</param>
-	/// <param name="maxDegreeOfParallelism">The maximum number of concurrent tasks saving/downloading to the destination.</param>
+	/// <param name="maxDegreeOfParallelism">The maximum number of concurrent tasks saving/downloading to the destination. (optional)</param>
 	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
 	/// <returns>A task that represents the entire save operation.</returns>
-	public async Task<byte[]> SaveBytesAsync<TState>(Action<SaveProgressChangedEventArgs<TState>> progressCallback, TState? userState = default,
-		int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
+	public async Task<byte[]> SaveBytesAsync(Action<SaveProgressChangedEventArgs> progressCallback, object? userState = default,
+		int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
 	{
 		var destination = new byte[Length];
 		await SaveBytesAsync(destination, progressCallback, userState, maxDegreeOfParallelism, cancellationToken).ConfigureAwait(false);
@@ -216,10 +213,10 @@ public sealed class FFileManifestStream : RandomAccessStream
 	/// <summary>
 	/// Asynchronously saves the current stream to a buffer.
 	/// </summary>
-	/// <param name="maxDegreeOfParallelism">The maximum number of concurrent tasks saving/downloading to the destination.</param>
+	/// <param name="maxDegreeOfParallelism">The maximum number of concurrent tasks saving/downloading to the destination. (optional)</param>
 	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
 	/// <returns>A task that represents the entire save operation.</returns>
-	public async Task<byte[]> SaveBytesAsync(int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
+	public async Task<byte[]> SaveBytesAsync(int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
 	{
 		var destination = new byte[Length];
 		await SaveBytesAsync(destination, maxDegreeOfParallelism, cancellationToken).ConfigureAwait(false);
@@ -229,30 +226,29 @@ public sealed class FFileManifestStream : RandomAccessStream
 	/// <summary>
 	/// Asynchronously saves the current stream to a file.
 	/// </summary>
-	/// <typeparam name="TState">The type of the <paramref name="userState"/>.</typeparam>
 	/// <param name="path">The path of the destination file.</param>
 	/// <param name="progressCallback">The progress change callback. (optional)</param>
 	/// <param name="userState">The user state for the <paramref name="progressCallback"/>. (optional)</param>
-	/// <param name="maxDegreeOfParallelism">The maximum number of concurrent tasks saving/downloading to the destination.</param>
+	/// <param name="maxDegreeOfParallelism">The maximum number of concurrent tasks saving/downloading to the destination. (optional)</param>
 	/// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
 	/// <returns>A task that represents the entire save operation.</returns>
-	public async Task SaveFileAsync<TState>(string path, Action<SaveProgressChangedEventArgs<TState>>? progressCallback, TState? userState = default,
-		int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
+	public async Task SaveFileAsync(string path, Action<SaveProgressChangedEventArgs>? progressCallback, object? userState = null,
+		int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
 	{
 		using var destination = File.OpenHandle(path, FileMode.Create, FileAccess.ReadWrite, FileShare.None, FileOptions.Asynchronous, Length);
-		var downloadState = new DownloadState<TState>(destination, _fileManifest.Manifest, Length, userState, progressCallback);
+		var downloadState = new DownloadState(destination, _fileManifest.Manifest, Length, userState, progressCallback);
 
 		var parallelOptions = new ParallelOptions
 		{
-			MaxDegreeOfParallelism = maxDegreeOfParallelism,
+			MaxDegreeOfParallelism = maxDegreeOfParallelism ?? Environment.ProcessorCount,
 			CancellationToken = cancellationToken
 		};
-		var enumerable = new ChunksWithOffsetEnumerable<TState>(downloadState, _fileManifest);
+		var enumerable = new ChunksWithOffsetEnumerable(downloadState, _fileManifest);
 		await Parallel.ForEachAsync(enumerable, parallelOptions, _cacheAsIs ? SaveAsIsAsync : SaveAsync).ConfigureAwait(false);
 		RandomAccess.FlushToDisk(destination);
 		return;
 
-		static async ValueTask SaveAsync<T>(ChunkWithOffset<T> tuple, CancellationToken token)
+		static async ValueTask SaveAsync(ChunkWithOffset tuple, CancellationToken token)
 		{
 			var poolBuffer = ArrayPool<byte>.Shared.Rent((int)tuple.ChunkPartSize);
 
@@ -271,7 +267,7 @@ public sealed class FFileManifestStream : RandomAccessStream
 			}
 		}
 
-		static async ValueTask SaveAsIsAsync<T>(ChunkWithOffset<T> tuple, CancellationToken token)
+		static async ValueTask SaveAsIsAsync(ChunkWithOffset tuple, CancellationToken token)
 		{
 			var poolBuffer = ArrayPool<byte>.Shared.Rent(tuple.State.Manifest.Options.ChunkDownloadBufferSize);
 
@@ -290,10 +286,10 @@ public sealed class FFileManifestStream : RandomAccessStream
 		}
 	}
 
-	/// <inheritdoc cref="SaveFileAsync{TState}"/>
-	public Task SaveFileAsync(string path, int maxDegreeOfParallelism = 16, CancellationToken cancellationToken = default)
+	/// <inheritdoc cref="SaveFileAsync(string,Action{SaveProgressChangedEventArgs}?,object?,int?,CancellationToken)"/>
+	public Task SaveFileAsync(string path, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
 	{
-		return SaveFileAsync<nint>(path, null, 0, maxDegreeOfParallelism, cancellationToken);
+		return SaveFileAsync(path, null, 0, maxDegreeOfParallelism, cancellationToken);
 	}
 
 	/// <summary>
@@ -531,10 +527,9 @@ public sealed class FFileManifestStream : RandomAccessStream
 /// <summary>
 /// Event for save progress
 /// </summary>
-/// <typeparam name="TState">Type of <see cref="UserState"/></typeparam>
-public class SaveProgressChangedEventArgs<TState> : EventArgs
+public class SaveProgressChangedEventArgs : EventArgs
 {
-	internal SaveProgressChangedEventArgs(TState? userState, long bytesSaved, long totalBytesToSave, int progressPercentage)
+	internal SaveProgressChangedEventArgs(object? userState, long bytesSaved, long totalBytesToSave, int progressPercentage)
 	{
 		UserState = userState;
 		BytesSaved = bytesSaved;
@@ -543,7 +538,7 @@ public class SaveProgressChangedEventArgs<TState> : EventArgs
 	}
 
 	/// <summary/>
-	public TState? UserState { get; }
+	public object? UserState { get; }
 	/// <summary/>
 	public long BytesSaved { get; }
 	/// <summary/>
@@ -552,19 +547,19 @@ public class SaveProgressChangedEventArgs<TState> : EventArgs
 	public int ProgressPercentage { get; }
 }
 
-internal class DownloadState<T>
+internal class DownloadState
 {
 	public readonly byte[] DestinationBuffer;
 	public readonly SafeFileHandle DestinationHandle;
 	public readonly FBuildPatchAppManifest Manifest;
 
-	private readonly T? _userState;
-	private readonly Action<SaveProgressChangedEventArgs<T>>? _callback;
+	private readonly object? _userState;
+	private readonly Action<SaveProgressChangedEventArgs>? _callback;
 	private readonly long _totalBytesToSave;
 	private long _bytesSaved;
 	private int _lastProgress;
 
-	public DownloadState(SafeFileHandle destinationHandle, FBuildPatchAppManifest manifest, long totalBytesToSave, T? userState, Action<SaveProgressChangedEventArgs<T>>? callback)
+	public DownloadState(SafeFileHandle destinationHandle, FBuildPatchAppManifest manifest, long totalBytesToSave, object? userState, Action<SaveProgressChangedEventArgs>? callback)
 	{
 		DestinationHandle = destinationHandle;
 		DestinationBuffer = null!;
@@ -574,7 +569,7 @@ internal class DownloadState<T>
 		_totalBytesToSave = totalBytesToSave;
 	}
 
-	public DownloadState(byte[] destinationBuffer, FBuildPatchAppManifest manifest, long totalBytesToSave, T? userState, Action<SaveProgressChangedEventArgs<T>>? callback)
+	public DownloadState(byte[] destinationBuffer, FBuildPatchAppManifest manifest, long totalBytesToSave, object? userState, Action<SaveProgressChangedEventArgs>? callback)
 	{
 		DestinationBuffer = destinationBuffer;
 		DestinationHandle = null!;
@@ -596,22 +591,22 @@ internal class DownloadState<T>
 			if (progress != _lastProgress)
 			{
 				_lastProgress = progress;
-				var eventArgs = new SaveProgressChangedEventArgs<T>(_userState, _bytesSaved, _totalBytesToSave, progress);
+				var eventArgs = new SaveProgressChangedEventArgs(_userState, _bytesSaved, _totalBytesToSave, progress);
 				_callback(eventArgs);
 			}
 		}
 	}
 }
 
-internal struct ChunkWithOffset<T>
+internal struct ChunkWithOffset
 {
-	public DownloadState<T> State;
+	public DownloadState State;
 	public FChunkInfo Chunk;
 	public uint ChunkPartOffset;
 	public uint ChunkPartSize;
 	public long Offset;
 
-	public ChunkWithOffset(DownloadState<T> state, FChunkInfo chunk, uint chunkPartOffset, uint chunkPartSize, long offset)
+	public ChunkWithOffset(DownloadState state, FChunkInfo chunk, uint chunkPartOffset, uint chunkPartSize, long offset)
 	{
 		State = state;
 		Chunk = chunk;
@@ -621,20 +616,20 @@ internal struct ChunkWithOffset<T>
 	}
 }
 
-internal readonly struct ChunksWithOffsetEnumerable<T> : IEnumerable<ChunkWithOffset<T>>
+internal readonly struct ChunksWithOffsetEnumerable : IEnumerable<ChunkWithOffset>
 {
-	private readonly DownloadState<T> _state;
+	private readonly DownloadState _state;
 	private readonly FFileManifest _fileManifest;
 
-	public ChunksWithOffsetEnumerable(DownloadState<T> state, FFileManifest fileManifest)
+	public ChunksWithOffsetEnumerable(DownloadState state, FFileManifest fileManifest)
 	{
 		_state = state;
 		_fileManifest = fileManifest;
 	}
 
-	public IEnumerator<ChunkWithOffset<T>> GetEnumerator()
+	public IEnumerator<ChunkWithOffset> GetEnumerator()
 	{
-		return new ChunksWithOffsetEnumerator<T>(_state, _fileManifest);
+		return new ChunksWithOffsetEnumerator(_state, _fileManifest);
 	}
 
 	IEnumerator IEnumerable.GetEnumerator()
@@ -656,15 +651,15 @@ internal readonly struct ChunksWithOffsetEnumerable<T> : IEnumerable<ChunkWithOf
 //	}
 //}
 
-internal struct ChunksWithOffsetEnumerator<T> : IEnumerator<ChunkWithOffset<T>>
+internal struct ChunksWithOffsetEnumerator : IEnumerator<ChunkWithOffset>
 {
-	private readonly DownloadState<T> _state;
+	private readonly DownloadState _state;
 	private readonly FFileManifest _fileManifest;
 	private long _offset;
 	private long _lastSize;
 	private int _chunkpartIndex;
 
-	public ChunksWithOffsetEnumerator(DownloadState<T> state, FFileManifest fileManifest)
+	public ChunksWithOffsetEnumerator(DownloadState state, FFileManifest fileManifest)
 	{
 		_state = state;
 		_fileManifest = fileManifest;
@@ -690,13 +685,13 @@ internal struct ChunksWithOffsetEnumerator<T> : IEnumerator<ChunkWithOffset<T>>
 		_chunkpartIndex = -1;
 	}
 
-	public ChunkWithOffset<T> Current
+	public ChunkWithOffset Current
 	{
 		get
 		{
 			var chunkPart = _fileManifest.ChunkPartsArray[_chunkpartIndex];
 			var chunk = _fileManifest.Manifest.Chunks[chunkPart.Guid];
-			return new ChunkWithOffset<T>(_state, chunk, chunkPart.Offset, chunkPart.Size, _offset);
+			return new ChunkWithOffset(_state, chunk, chunkPart.Offset, chunkPart.Size, _offset);
 		}
 	}
 
