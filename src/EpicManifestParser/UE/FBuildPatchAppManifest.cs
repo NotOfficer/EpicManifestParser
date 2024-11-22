@@ -1,5 +1,6 @@
 ﻿using System.Buffers;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -18,9 +19,9 @@ public class FBuildPatchAppManifest
 	/// <summary/>
 	public FManifestMeta Meta { get; internal set; } = null!;
 	/// <summary/>
-	public IReadOnlyList<FChunkInfo> ChunkDataList { get; internal set; } = null!;
+	public IReadOnlyList<FChunkInfo> ChunkList { get; internal set; } = null!;
 	/// <summary/>
-	public IReadOnlyList<FFileManifest> FileManifestList { get; internal set; } = null!;
+	public IReadOnlyList<FFileManifest> Files { get; internal set; } = null!;
 	/// <summary/>
 	public IReadOnlyList<FCustomField> CustomFields { get; internal set; } = null!;
 	/// <summary/>
@@ -319,8 +320,8 @@ public class FBuildPatchAppManifest
 		var manifest = new FBuildPatchAppManifest
 		{
 			Meta = meta,
-			ChunkDataList = chunkList,
-			FileManifestList = fileManifests,
+			ChunkList = chunkList,
+			Files = fileManifests,
 			CustomFields = customFields ?? [],
 			Chunks = mutableChunkInfoLookup,
 			Options = options
@@ -429,8 +430,8 @@ public class FBuildPatchAppManifest
 				Options = options
 			};
 			manifest.Meta = new FManifestMeta(ref reader);
-			manifest.ChunkDataList = FChunkInfo.ReadChunkDataList(ref reader, chunks);
-			manifest.FileManifestList = FFileManifest.ReadFileDataList(ref reader, manifest);
+			manifest.ChunkList = FChunkInfo.ReadChunkDataList(ref reader, chunks);
+			manifest.Files = FFileManifest.ReadFileDataList(ref reader, manifest);
 			manifest.CustomFields = FCustomField.ReadCustomFields(ref reader);
 			manifest.PostSetup();
 			return manifest;
@@ -444,12 +445,12 @@ public class FBuildPatchAppManifest
 
 	private void PostSetup()
 	{
-		foreach (var file in FileManifestList)
+		foreach (var file in Files)
 		{
 			TotalBuildSize += file.FileSize;
 		}
 
-		foreach (var chunk in ChunkDataList)
+		foreach (var chunk in ChunkList)
 		{
 			TotalDownloadSize += chunk.FileSize;
 		}
