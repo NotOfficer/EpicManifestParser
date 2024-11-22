@@ -292,7 +292,7 @@ public sealed class FChunkInfo
 
 		var result = zlibngUncompress(
 			zlibng,
-			chunkBuffer, 0, header.DataSizeCompressed,
+			chunkBuffer, header.HeaderSize, header.DataSizeCompressed,
 			uncompressPoolBuffer, 0, header.DataSizeUncompressed);
 
 		if (!result)
@@ -300,13 +300,13 @@ public sealed class FChunkInfo
 	}
 
 	// ReSharper disable once UseSymbolAlias
-	internal static void Test_ZLibStream(byte[] uncompressPoolBuffer, byte[] chunkBuffer)
+	internal static void Test_ZlibStream(byte[] uncompressPoolBuffer, byte[] chunkBuffer)
 	{
 		var header = FChunkHeader.Parse(chunkBuffer);
 
 		var result = ManifestZlibStreamDecompressor.Decompress(
 			null,
-			chunkBuffer, 0, header.DataSizeCompressed,
+			chunkBuffer, header.HeaderSize, header.DataSizeCompressed,
 			uncompressPoolBuffer, 0, header.DataSizeUncompressed);
 
 		if (!result)
