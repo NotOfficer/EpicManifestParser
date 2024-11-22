@@ -7,16 +7,16 @@
 
     <Description>EpicManifestParser decompressor using Zlib-ng.NET</Description>
     <PackageTags>manifest, epicgames, manifestparser</PackageTags>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
-    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.1.0</AssemblyVersion>
+    <FileVersion>1.0.1.0</FileVersion>
+    <Version>1.0.1</Version>
   </PropertyGroup>
 
   <PropertyGroup>
     <Authors>NotOfficer</Authors>
     <Copyright>Copyright (c) 2024 NotOfficer</Copyright>
     <NeutralLanguage>en</NeutralLanguage>
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageIcon>icon.png</PackageIcon>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
