@@ -37,10 +37,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="AsyncKeyedLock" Version="7.1.3" />
+    <PackageReference Include="AsyncKeyedLock" Version="7.1.4" />
     <PackageReference Include="Flurl" Version="4.0.0" />
     <PackageReference Include="GenericReader" Version="2.2.0" />
-    <PackageReference Include="OffiUtils" Version="2.0.0" />
+    <PackageReference Include="OffiUtils" Version="2.0.1" />
   </ItemGroup>
 
 </Project>
