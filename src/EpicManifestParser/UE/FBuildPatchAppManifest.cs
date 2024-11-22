@@ -38,6 +38,46 @@ public class FBuildPatchAppManifest
 	internal FBuildPatchAppManifest() { }
 
 	/// <summary>
+	/// Finds a file by <see cref="FFileManifest.FileName"/>.
+	/// </summary>
+	/// <param name="fileName">The filename to find.</param>
+	/// <param name="comparisonType">The type to compare the filename.</param>
+	/// <returns>The <see cref="FFileManifest"/> instance if the the file was found; otherwise, <see langword="null"/>.</returns>
+	public FFileManifest? FindFile(string fileName, StringComparison comparisonType = StringComparison.Ordinal)
+		=> TryFindFile(fileName, comparisonType, out var file) ? file : null;
+
+	/// <summary>
+	/// Tries to find a file by <see cref="FFileManifest.FileName"/> using <see cref="StringComparison.Ordinal"/> to compare it.
+	/// </summary>
+	/// <param name="fileName">The filename to find.</param>
+	/// <param name="fileManifest">The find result.</param>
+	/// <returns><see langword="true"/> if the the file was found; otherwise, <see langword="false"/>.</returns>
+	public bool TryFindFile(string fileName, [NotNullWhen(true)] out FFileManifest? fileManifest)
+		=> TryFindFile(fileName, StringComparison.Ordinal, out fileManifest);
+
+	/// <summary>
+	/// Tries to find a file by <see cref="FFileManifest.FileName"/>.
+	/// </summary>
+	/// <param name="fileName">The filename to find.</param>
+	/// <param name="comparisonType">The type to compare the filename.</param>
+	/// <param name="fileManifest">The find result.</param>
+	/// <returns><see langword="true"/> if the the file was found; otherwise, <see langword="false"/>.</returns>
+	public bool TryFindFile(string fileName, StringComparison comparisonType, [NotNullWhen(true)] out FFileManifest? fileManifest)
+	{
+		foreach (var file in Files)
+		{
+			if (!file.FileName.Equals(fileName, comparisonType))
+				continue;
+
+			fileManifest = file;
+			return true;
+		}
+
+		fileManifest = null;
+		return false;
+	}
+
+	/// <summary>
 	/// Get the chunk sub-directory name
 	/// </summary>
 	public string GetChunkSubdir() => Meta.FeatureLevel switch
