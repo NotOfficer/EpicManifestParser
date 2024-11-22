@@ -2,8 +2,6 @@
 
 using EpicManifestParser.Api;
 
-using ZlibngDotNet;
-
 namespace EpicManifestParser;
 // ReSharper disable UseSymbolAlias
 
@@ -12,6 +10,21 @@ namespace EpicManifestParser;
 /// </summary>
 public class ManifestParseOptions
 {
+	/// <summary>
+	/// Zlib decompress delegate.
+	/// </summary>
+	public delegate bool DecompressDelegate(object? state, byte[] source, int sourceOffset, int sourceLength, byte[] destination, int destinationOffset, int destinationLength);
+
+	/// <summary>
+	/// Zlib decompress delegate, defaults to <see cref="ManifestZlibStreamDecompressor.Decompress"/>.
+	/// </summary>
+	public DecompressDelegate? Decompressor { get; set; } = ManifestZlibStreamDecompressor.Decompress;
+
+	/// <summary>
+	/// Optional state that gets passed to the <see cref="Decompressor"/> delegate.
+	/// </summary>
+	public object? DecompressorState { get; set; }
+
 	/// <summary>
 	/// Required for downloading, must have a leading slash!
 	/// </summary>
@@ -45,13 +58,6 @@ public class ManifestParseOptions
 	/// Optional for caching manifests when using <see cref="ManifestInfo.DownloadAndParseAsync(ManifestParseOptions, Predicate&lt;ManifestInfoElement&gt;?, Predicate&lt;ManifestInfoElementManifest&gt;?, CancellationToken)"/>.
 	/// </summary>
 	public string? ManifestCacheDirectory { get; set; }
-
-	/// <summary>
-	/// Required for:<br/>
-	/// - deserializing compressed binary manifests<br/>
-	/// - downloading compressed chunks<br/>
-	/// </summary>
-	public Zlibng? Zlibng { get; set; }
 
 	/// <summary>
 	/// Creates a default <see cref="HttpClient"/> and also sets <see cref="Client"/> to its instance.

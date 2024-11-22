@@ -37,7 +37,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Zlib-ng.NET" Version="1.1.0" />
     <PackageReference Include="AsyncKeyedLock" Version="7.1.3" />
     <PackageReference Include="Flurl" Version="4.0.0" />
     <PackageReference Include="GenericReader" Version="2.2.0" />

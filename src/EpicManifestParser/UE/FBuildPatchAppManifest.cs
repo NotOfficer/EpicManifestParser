@@ -8,8 +8,6 @@ using AsyncKeyedLock;
 
 using EpicManifestParser.Json;
 
-using ZlibngDotNet;
-
 namespace EpicManifestParser.UE;
 
 /// <summary>
@@ -387,8 +385,11 @@ public class FBuildPatchAppManifest
 				var manifestCompressedData = manifestRawDataBuffer.AsSpan(0, header.DataSizeCompressed);
 				fileReader.Read(manifestCompressedData);
 
-				var result = options.Zlibng!.Uncompress2(manifestRawData.Span, manifestCompressedData, out int32 bytesWritten, out int32 bytesConsumed);
-				if (result != ZlibngCompressionResult.Ok || bytesWritten != header.DataSizeUncompressed || bytesConsumed != header.DataSizeCompressed)
+				var result = options.Decompressor!.Invoke(
+					options.DecompressorState,
+					manifestRawDataBuffer, 0, header.DataSizeCompressed,
+					manifestRawDataBuffer, header.DataSizeCompressed, header.DataSizeUncompressed);
+				if (!result)
 					throw new FileLoadException("Failed to uncompress data");
 			}
 			else if (header.StoredAs == EManifestStorageFlags.None)

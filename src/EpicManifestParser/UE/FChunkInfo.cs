@@ -3,8 +3,6 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
-using ZlibngDotNet;
-
 namespace EpicManifestParser.UE;
 
 /// <summary>
@@ -165,23 +163,22 @@ public sealed class FChunkInfo
 			throw new NotSupportedException("Encrypted chunks are not supported");
 		if (!header.StoredAs.HasFlag(EChunkStorageFlags.Compressed))
 			throw new UnreachableException("Unknown/new chunk ChunkStorageFlag");
-		if (manifest.Options.Zlibng is null)
-			throw new InvalidOperationException("Chunk is compressed and zlib-ng instance was null");
+		if (manifest.Options.Decompressor is null)
+			throw new InvalidOperationException("Data is compressed and decompressor delegate was null");
 
 		// cant uncompress in-place
 		var poolBuffer = ArrayPool<byte>.Shared.Rent(header.DataSizeCompressed);
 
 		try
 		{
-			Unsafe.CopyBlockUnaligned(ref poolBuffer[0], ref destination[reader.Position], (uint)header.DataSizeCompressed);
+			Unsafe.CopyBlockUnaligned(ref poolBuffer[0], ref destination[header.HeaderSize], (uint)header.DataSizeCompressed);
 
-			var result = manifest.Options.Zlibng.Uncompress(
-				destination.AsSpan(0, header.DataSizeUncompressed),
-				poolBuffer.AsSpan(0, header.DataSizeCompressed),
-				out int bytesWritten);
-
-			if (result != ZlibngCompressionResult.Ok || bytesWritten != header.DataSizeUncompressed)
-				throw new FileLoadException("Failed to uncompress chunk data");
+			var result = manifest.Options.Decompressor.Invoke(
+				manifest.Options.DecompressorState,
+				poolBuffer, 0, header.DataSizeCompressed,
+				destination, 0, header.DataSizeUncompressed);
+			if (!result)
+				throw new FileLoadException("Failed to uncompress data");
 		}
 		finally
 		{
@@ -255,19 +252,18 @@ public sealed class FChunkInfo
 				throw new NotSupportedException("Encrypted chunks are not supported");
 			if (!header.StoredAs.HasFlag(EChunkStorageFlags.Compressed))
 				throw new UnreachableException("Unknown/new chunk ChunkStorageFlag");
-			if (manifest.Options.Zlibng is null)
-				throw new InvalidOperationException("Chunk is compressed and zlib-ng instance was null");
+			if (manifest.Options.Decompressor is null)
+				throw new InvalidOperationException("Data is compressed and decompressor delegate was null");
 
 			// cant seek for uncompression
 			uncompressPoolBuffer = ArrayPool<byte>.Shared.Rent(header.DataSizeUncompressed);
 
-			var result = manifest.Options.Zlibng.Uncompress(
-				uncompressPoolBuffer.AsSpan(0, header.DataSizeUncompressed),
-				poolBuffer.AsSpan(reader.Position, header.DataSizeCompressed),
-				out int bytesWritten);
-
-			if (result != ZlibngCompressionResult.Ok || bytesWritten != header.DataSizeUncompressed)
-				throw new FileLoadException("Failed to uncompress chunk data");
+			var result = manifest.Options.Decompressor.Invoke(
+				manifest.Options.DecompressorState,
+				poolBuffer, header.HeaderSize, header.DataSizeCompressed,
+				uncompressPoolBuffer, 0, header.DataSizeUncompressed);
+			if (!result)
+				throw new FileLoadException("Failed to uncompress data");
 
 			Unsafe.CopyBlockUnaligned(ref buffer[offset], ref uncompressPoolBuffer[chunkPartOffset], (uint)count);
 			if (!shouldCache)
@@ -287,5 +283,33 @@ public sealed class FChunkInfo
 			if (uncompressPoolBuffer is not null)
 				ArrayPool<byte>.Shared.Return(uncompressPoolBuffer);
 		}
+	}
+
+	// ReSharper disable once UseSymbolAlias
+	internal static void Test_Zlibng(byte[] uncompressPoolBuffer, byte[] chunkBuffer, object zlibng, ManifestParseOptions.DecompressDelegate zlibngUncompress)
+	{
+		var header = FChunkHeader.Parse(chunkBuffer);
+
+		var result = zlibngUncompress(
+			zlibng,
+			chunkBuffer, 0, header.DataSizeCompressed,
+			uncompressPoolBuffer, 0, header.DataSizeUncompressed);
+
+		if (!result)
+			throw new FileLoadException("Failed to uncompress chunk data");
+	}
+
+	// ReSharper disable once UseSymbolAlias
+	internal static void Test_ZLibStream(byte[] uncompressPoolBuffer, byte[] chunkBuffer)
+	{
+		var header = FChunkHeader.Parse(chunkBuffer);
+
+		var result = ManifestZlibStreamDecompressor.Decompress(
+			null,
+			chunkBuffer, 0, header.DataSizeCompressed,
+			uncompressPoolBuffer, 0, header.DataSizeUncompressed);
+
+		if (!result)
+			throw new FileLoadException("Failed to uncompress chunk data");
 	}
 }
