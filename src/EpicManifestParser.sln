@@ -7,6 +7,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EpicManifestParser", "EpicM
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EpicManifestParser.Playground", "EpicManifestParser.Playground\EpicManifestParser.Playground.csproj", "{CC7A466C-7EA9-4A36-957B-7A9C2E571ADE}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EpicManifestParser.ZlibngDotNetDecompressor", "EpicManifestParser.ZlibngDotNetDecompressor\EpicManifestParser.ZlibngDotNetDecompressor.csproj", "{F284AF46-619B-460D-8EF4-27F23B3EFD28}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -31,6 +33,14 @@ Global
 		{CC7A466C-7EA9-4A36-957B-7A9C2E571ADE}.Release|Any CPU.Build.0 = Release|Any CPU
 		{CC7A466C-7EA9-4A36-957B-7A9C2E571ADE}.Release|x64.ActiveCfg = Release|x64
 		{CC7A466C-7EA9-4A36-957B-7A9C2E571ADE}.Release|x64.Build.0 = Release|x64
+		{F284AF46-619B-460D-8EF4-27F23B3EFD28}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F284AF46-619B-460D-8EF4-27F23B3EFD28}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F284AF46-619B-460D-8EF4-27F23B3EFD28}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{F284AF46-619B-460D-8EF4-27F23B3EFD28}.Debug|x64.Build.0 = Debug|Any CPU
+		{F284AF46-619B-460D-8EF4-27F23B3EFD28}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F284AF46-619B-460D-8EF4-27F23B3EFD28}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F284AF46-619B-460D-8EF4-27F23B3EFD28}.Release|x64.ActiveCfg = Release|Any CPU
+		{F284AF46-619B-460D-8EF4-27F23B3EFD28}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
