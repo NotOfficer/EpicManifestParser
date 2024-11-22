@@ -120,7 +120,7 @@ public readonly struct FSHAHash : IEquatable<FSHAHash>, ISpanFormattable
 	/// <exception cref="FormatException">If an invalid format is used.</exception>
 	public bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format, IFormatProvider? provider)
 	{
-		if (format.Length == 0 || format is "X")
+		if (format.IsEmpty || format is "X")
 			return StringUtils.TryWriteBytesToHexUpper(AsSpan(), destination, out charsWritten);
 		if (format is "x")
 			return StringUtils.TryWriteBytesToHexLower(AsSpan(), destination, out charsWritten);
@@ -129,7 +129,7 @@ public readonly struct FSHAHash : IEquatable<FSHAHash>, ISpanFormattable
 }
 
 /// <summary>
-/// Converts <see cref="FSHAHash"/> from JSON.
+/// Converts <see cref="FSHAHash"/> from and to JSON.
 /// </summary>
 public sealed class FSHAHashConverter : JsonConverter<FSHAHash>
 {
@@ -148,12 +148,17 @@ public sealed class FSHAHashConverter : JsonConverter<FSHAHash>
 		return result;
 	}
 
-	/// <summary>
-	/// Not supported
-	/// </summary>
-	/// <exception cref="NotSupportedException"></exception>
+	/// <inheritdoc/>
 	public override void Write(Utf8JsonWriter writer, FSHAHash value, JsonSerializerOptions options)
 	{
-		throw new NotSupportedException();
+		Span<char> hashUtf16 = stackalloc char[FSHAHash.Size * 2];
+
+		if (value.TryFormat(hashUtf16, out _, default, null))
+		{
+			writer.WriteStringValue(hashUtf16);
+			return;
+		}
+
+		writer.WriteStringValue(string.Empty);
 	}
 }

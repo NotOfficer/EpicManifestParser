@@ -133,13 +133,13 @@ public readonly struct FGuid : IEquatable<FGuid>, ISpanFormattable, IUtf8SpanFor
 		return HashCode.Combine(A, B, C, D);
 	}
 	
-	/// <inheritdoc />
+	/// <inheritdoc cref="Equals(FGuid)"/>
 	public static bool operator ==(FGuid left, FGuid right)
 	{
 		return left.Equals(right);
 	}
 	
-	/// <inheritdoc />
+	/// <inheritdoc cref="Equals(FGuid)"/>
 	public static bool operator !=(FGuid left, FGuid right)
 	{
 		return !left.Equals(right);
@@ -168,16 +168,29 @@ public readonly struct FGuid : IEquatable<FGuid>, ISpanFormattable, IUtf8SpanFor
 	}
 }
 
-internal sealed class FGuidConverter : JsonConverter<FGuid>
+/// <summary>
+/// Converts <see cref="FGuid"/> from and to JSON.
+/// </summary>
+public sealed class FGuidConverter : JsonConverter<FGuid>
 {
+	/// <inheritdoc/>
 	public override FGuid Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
 	{
 		if (reader.ValueSpan.IsEmpty) return default;
 		return new FGuid(reader.ValueSpan);
 	}
-
+	
+	/// <inheritdoc/>
 	public override void Write(Utf8JsonWriter writer, FGuid value, JsonSerializerOptions options)
 	{
-		throw new NotSupportedException();
+		Span<byte> guidUtf8 = stackalloc byte[FGuid.Size * 2];
+
+		if (value.TryFormat(guidUtf8, out _, default, null))
+		{
+			writer.WriteStringValue(guidUtf8);
+			return;
+		}
+
+		writer.WriteStringValue(string.Empty);
 	}
 }
