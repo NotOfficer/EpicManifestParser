@@ -135,7 +135,7 @@ public sealed class FChunkInfo
 				var uri = GetUri(manifest);
 				var destMs = new MemoryStream(destination, 0, destination.Length, true);
 				using var res = await manifest.Options.Client!.GetAsync(uri, cancellationToken).ConfigureAwait(false);
-				res.EnsureSuccessStatusCode();
+				EnsureSuccessStatusCode(res, uri);
 				await res.Content.CopyToAsync(destMs, cancellationToken).ConfigureAwait(false);
 				fileSize = (int)destMs.Position;
 
@@ -199,14 +199,15 @@ public sealed class FChunkInfo
 
 		using var _ = await manifest.ChunksLocker.LockAsync(Guid, cancellationToken).ConfigureAwait(false);
 
-		var shouldCache = manifest.Options.ChunkCacheDirectory is not null;
-		string? cachePath = null;
-
 		if (CachePath is not null)
 		{
 			using var fileHandle = File.OpenHandle(CachePath);
 			return await RandomAccess.ReadAsync(fileHandle, buffer.AsMemory(offset, count), chunkPartOffset, cancellationToken).ConfigureAwait(false);
 		}
+
+		var shouldCache = manifest.Options.ChunkCacheDirectory is not null;
+		string? cachePath = null;
+
 		if (shouldCache)
 		{
 			cachePath = Path.Combine(manifest.Options.ChunkCacheDirectory!, $"{Hash:X16}_{Guid}.chunk");
@@ -225,7 +226,7 @@ public sealed class FChunkInfo
 		{
 			var uri = GetUri(manifest);
 			using var res = await manifest.Options.Client!.GetAsync(uri, cancellationToken).ConfigureAwait(false);
-			res.EnsureSuccessStatusCode();
+			EnsureSuccessStatusCode(res, uri);
 			var poolBufferSize = res.Content.Headers.ContentLength ?? manifest.Options.ChunkDownloadBufferSize;
 			poolBuffer = ArrayPool<byte>.Shared.Rent((int)poolBufferSize);
 			var destMs = new MemoryStream(poolBuffer, 0, poolBuffer.Length, true, true);
@@ -282,6 +283,21 @@ public sealed class FChunkInfo
 				ArrayPool<byte>.Shared.Return(poolBuffer);
 			if (uncompressPoolBuffer is not null)
 				ArrayPool<byte>.Shared.Return(uncompressPoolBuffer);
+		}
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal static void EnsureSuccessStatusCode(HttpResponseMessage res, Uri uri)
+	{
+		try
+		{
+			res.EnsureSuccessStatusCode();
+		}
+		catch (HttpRequestException ex)
+		{
+			ex.Data.Add("Uri", uri);
+			ex.Data.Add("Headers", res.Headers);
+			throw;
 		}
 	}
 

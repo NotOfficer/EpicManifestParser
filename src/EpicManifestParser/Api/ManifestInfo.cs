@@ -4,8 +4,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
-using EpicManifestParser.UE;
-
 using Flurl;
 
 namespace EpicManifestParser.Api;

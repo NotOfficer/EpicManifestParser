@@ -16,12 +16,15 @@ using ZlibngDotNet;
 var zlibng = new Zlibng(Benchmarks.ZlibngPath);
 
 await TestLauncherManifest(zlibng);
+return;
 
-static async Task TestLauncherManifest(Zlibng? zlibng = null)
+static async Task<byte[]> TestLauncherManifest(Zlibng? zlibng = null)
 {
 	var options = new ManifestParseOptions
 	{
-		ChunkBaseUrl = "http://download.epicgames.com/Builds/UnrealEngineLauncher/CloudDir/"
+		ChunkBaseUrl = "http://download.epicgames.com/Builds/UnrealEngineLauncher/CloudDir/",
+		//ChunkCacheDirectory = Directory.CreateDirectory(Path.Combine(Benchmarks.DownloadsDir, "chunks_v2")).FullName,
+		//ManifestCacheDirectory = Directory.CreateDirectory(Path.Combine(Benchmarks.DownloadsDir, "manifests_v2")).FullName,
 	};
 
 	if (zlibng is not null)
@@ -38,14 +41,36 @@ static async Task TestLauncherManifest(Zlibng? zlibng = null)
 
 	var fileManifest = manifest.FindFile("Portal/Binaries/Win64/EpicGamesLauncher.exe")!;
 	var stream = fileManifest.GetStream();
-	var fileName = fileManifest.FileName.CutAfterLast('/');
-	
-	Console.WriteLine($"Saving {fileName}...");
-	var fileBytes = await stream.SaveBytesAsync(ProgressCallback, fileName);
-	Console.WriteLine($"Hashes match: {fileManifest.FileHash == FSHAHash.Compute(fileBytes)}");
-}
 
-return;
+	var fileBytes = new byte[stream.Length];
+
+#if !DEBUG
+	await Task.Delay(TimeSpan.FromSeconds(10));
+
+	for (var i = 0; i < 10_000; i++)
+	{
+		await stream.SaveBytesAsync(fileBytes);
+	}
+#else
+	var fileName = fileManifest.FileName.CutAfterLast('/')!;
+	Console.WriteLine($"Saving {fileName}...");
+
+	try
+	{
+		await stream.SaveBytesAsync(fileBytes, ProgressCallback, fileName);
+	}
+	catch (Exception ex)
+	{
+		var uri = ex.Data["Uri"];
+		var headers = ex.Data["Headers"];
+		return [];
+	}
+	
+	Console.WriteLine($"Hashes match: {fileManifest.FileHash == FSHAHash.Compute(fileBytes)}");
+#endif
+
+	return fileBytes;
+}
 
 //BenchmarkDotNet.Running.BenchmarkRunner.Run<Benchmarks>();
 //return;
