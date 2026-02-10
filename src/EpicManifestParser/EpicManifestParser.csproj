@@ -41,7 +41,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AsyncKeyedLock" Version="7.1.4" />
+    <PackageReference Include="AsyncKeyedLock" Version="8.0.2" />
     <PackageReference Include="Flurl" Version="4.0.0" />
     <PackageReference Include="GenericReader" Version="2.2.0" />
     <PackageReference Include="OffiUtils" Version="2.0.1" />

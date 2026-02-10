@@ -561,7 +561,7 @@ internal sealed class DownloadState<TDestination> : IEnumerable<ChunkWithOffset<
 	public readonly TDestination Destination;
 	public readonly FFileManifest FileManifest;
 
-	private readonly LockObject? _lock;
+	private readonly LockObject _lock = new();
 	private readonly object? _userState;
 	private readonly Action<SaveProgressChangedEventArgs>? _callback;
 	private readonly long _totalBytesToSave;
@@ -580,7 +580,6 @@ internal sealed class DownloadState<TDestination> : IEnumerable<ChunkWithOffset<
 		FileManifest = fileManifest;
 
 		if (callback is null) return;
-		_lock = new LockObject();
 		_userState = userState;
 		_callback = callback;
 		_totalBytesToSave = totalBytesToSave;
@@ -591,7 +590,7 @@ internal sealed class DownloadState<TDestination> : IEnumerable<ChunkWithOffset<
 		if (_callback is null)
 			return;
 
-		lock (_lock!)
+		lock (_lock)
 		{
 			_bytesSaved += amount;
 			var progress = (int)MathF.Truncate((float)_bytesSaved / _totalBytesToSave * 100f);
