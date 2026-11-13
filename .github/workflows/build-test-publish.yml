@@ -5,20 +5,23 @@ on:
     branches:
       - master
 
-defaults:
-  run:
-    working-directory: src
+permissions:
+  contents: read
 
 jobs:
-  build-test-publish:
+  build-test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: | 
+          dotnet-version: |
             10.0.x
+            11.0.x
 
       - name: Restore dependencies
         run: dotnet restore
@@ -38,9 +41,29 @@ jobs:
           name: nuget-packages
           path: ~/nuget-packages
 
+  # A separate job, so restore, build and tests never run with the OIDC token permission.
+  publish:
+    needs: build-test
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - name: Download Build Artifact(s)
+        uses: actions/download-artifact@v8
+        with:
+          name: nuget-packages
+          path: nuget-packages
+
+      # Exchanges the GitHub OIDC token for an API key that is valid for one hour.
+      - name: NuGet Login
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: Fortnite-API
+
       - name: Push NuGet Package(s)
         run: |
-          dotnet nuget push ~/nuget-packages/*.nupkg \
+          dotnet nuget push nuget-packages/*.nupkg \
             --source https://api.nuget.org/v3/index.json \
-            --api-key ${{ secrets.NUGET_API_KEY }} \
+            --api-key ${{ steps.login.outputs.NUGET_API_KEY }} \
             --skip-duplicate
