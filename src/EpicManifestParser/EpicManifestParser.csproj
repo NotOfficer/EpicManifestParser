@@ -3,7 +3,7 @@
   <PropertyGroup>
     <Description>A .NET parser &amp; downloader for EpicGames manifests</Description>
     <PackageTags>manifest, epicgames, manifestparser</PackageTags>
-    <Version>3.0.0-preview.1</Version>
+    <Version>3.0.0-preview.2</Version>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -25,7 +25,6 @@
 
   <ItemGroup>
     <PackageReference Include="AsyncKeyedLock" />
-    <PackageReference Include="Flurl" />
     <PackageReference Include="GenericReader" />
     <PackageReference Include="OffiUtils" />
   </ItemGroup>

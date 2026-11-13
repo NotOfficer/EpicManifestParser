@@ -48,17 +48,30 @@ public readonly struct FChunkPart
         FileOffset = fileOffset;
     }
 
-    internal FChunkPart(ref ManifestReader reader, int64 fileOffset, IReadOnlyDictionary<FGuid, FChunkInfo> chunks)
+    /// <summary>
+    /// The size of a serialized chunk part: data size, GUID, offset and size.
+    /// </summary>
+    internal const int32 SerializedSize = sizeof(int32) + FGuid.Size + sizeof(uint32) + sizeof(uint32);
+
+    /// <param name="reader">The reader at the chunk part.</param>
+    /// <param name="fileOffset">The offset of the part in its file.</param>
+    /// <param name="chunks">The chunks of the manifest.</param>
+    /// <param name="limit">The end of the enclosing file manifest list.</param>
+    /// <exception cref="InvalidDataException">The part does not fit or its chunk is not in <paramref name="chunks"/>.</exception>
+    internal FChunkPart(ref ManifestReader reader, int64 fileOffset, IReadOnlyDictionary<FGuid, FChunkInfo> chunks, int32 limit)
     {
-        int startPos = reader.Position;
-        int32 dataSize = reader.Read<int32>();
+        // the data size is at least SerializedSize, so the reads below stay inside the part
+        int32 end = reader.BeginSection(ManifestSection.ChunkPart, SerializedSize, limit);
 
         FGuid guid = reader.Read<FGuid>();
-        Chunk = chunks[guid];
+        if (!chunks.TryGetValue(guid, out FChunkInfo? chunk))
+            ManifestSection.ThrowUnknownChunk(guid);
+
+        Chunk = chunk;
         Offset = reader.Read<uint32>();
         Size = reader.Read<uint32>();
         FileOffset = fileOffset;
 
-        reader.Position = startPos + dataSize;
+        reader.Position = end;
     }
 }

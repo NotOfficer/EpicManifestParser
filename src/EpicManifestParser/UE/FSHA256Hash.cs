@@ -72,10 +72,7 @@ public struct FSHA256Hash : IFHash<FSHA256Hash>, IEquatable<FSHA256Hash>, ISpanF
 
     /// <inheritdoc/>
     public static Task<FSHA256Hash> ComputeAsync(string filePath, CancellationToken cancellationToken = default)
-    {
-        using FileStream stream = File.OpenRead(filePath);
-        return ComputeAsync(stream, cancellationToken);
-    }
+        => FHashHelpers.ComputeFileHashAsync<FSHA256Hash>(filePath, HashAlgorithmName.SHA256, cancellationToken);
 
     /// <inheritdoc cref="IFHash{T}.ToString()"/>
     public override string ToString() => Convert.ToHexString(this);

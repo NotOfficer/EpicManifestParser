@@ -72,10 +72,7 @@ public struct FMD5Hash : IFHash<FMD5Hash>, IEquatable<FMD5Hash>, ISpanFormattabl
 
     /// <inheritdoc/>
     public static Task<FMD5Hash> ComputeAsync(string filePath, CancellationToken cancellationToken = default)
-    {
-        using FileStream stream = File.OpenRead(filePath);
-        return ComputeAsync(stream, cancellationToken);
-    }
+        => FHashHelpers.ComputeFileHashAsync<FMD5Hash>(filePath, HashAlgorithmName.MD5, cancellationToken);
 
     /// <inheritdoc cref="IFHash{T}.ToString()"/>
     public override string ToString() => Convert.ToHexString(this);

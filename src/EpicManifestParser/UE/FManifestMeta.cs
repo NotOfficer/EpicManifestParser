@@ -1,4 +1,10 @@
-﻿namespace EpicManifestParser.UE;
+﻿using System.Buffers;
+using System.Buffers.Binary;
+using System.Buffers.Text;
+using System.Security.Cryptography;
+using System.Text;
+
+namespace EpicManifestParser.UE;
 
 // https://github.com/NotOfficer/UnrealEngine/blob/1436d646b9b11ffe9a46b04e9617dba689b56d35/Engine/Source/Runtime/Online/BuildPatchServices/Private/Data/ManifestData.h?plain=1#L91C15-L91C15
 /// <summary>
@@ -80,8 +86,7 @@ public sealed class FManifestMeta
     // https://github.com/NotOfficer/UnrealEngine/blob/1436d646b9b11ffe9a46b04e9617dba689b56d35/Engine/Source/Runtime/Online/BuildPatchServices/Private/Data/ManifestData.cpp?plain=1#L494C57-L494C57
     internal FManifestMeta(ref ManifestReader reader)
     {
-        int startPos = reader.Position;
-        int32 dataSize = reader.Read<int32>();
+        int32 end = reader.BeginSection(ManifestSection.Meta, ManifestSection.HeaderSize, reader.Length);
         EManifestMetaVersion dataVersion = reader.Read<EManifestMetaVersion>();
 
         if (dataVersion >= EManifestMetaVersion.Original)
@@ -111,13 +116,44 @@ public sealed class FManifestMeta
             UninstallActionArgs = reader.ReadFString();
         }
 
-        reader.Position = startPos + dataSize;
+        reader.EndSection(ManifestSection.Meta, end);
     }
 
-    internal static string GetBackwardsCompatibleBuildId(in FManifestMeta meta)
+    // Port of FBuildPatchUtils::GetBackwardsCompatibleBuildId, BuildPatchUtil.cpp lines 166-192:
+    // https://github.com/EpicGames/UnrealEngine/blob/8c31706601135aadf2f957fb76e2af46f04a8ef9/Engine/Source/Runtime/Online/BuildPatchServices/Private/BuildPatchUtil.cpp#L166-L192
+    /// <summary>
+    /// The build id of a manifest that does not store one (JSON, or binary below <see cref="EManifestMetaVersion.SerialisesBuildId"/>):
+    /// the SHA1 of the app id (4 bytes, little endian) and the UTF-8 app name, build version, launch exe and launch command,
+    /// as URL safe base64 without padding.
+    /// </summary>
+    internal static string GetBackwardsCompatibleBuildId(FManifestMeta meta)
     {
-        // TODO: https://github.com/NotOfficer/UnrealEngine/blob/1436d646b9b11ffe9a46b04e9617dba689b56d35/Engine/Source/Runtime/Online/BuildPatchServices/Private/BuildPatchUtil.cpp?plain=1#L196C36-L196C36
-        return "";
+        int32 length = sizeof(uint32)
+                       + Encoding.UTF8.GetByteCount(meta.AppName)
+                       + Encoding.UTF8.GetByteCount(meta.BuildVersion)
+                       + Encoding.UTF8.GetByteCount(meta.LaunchExe)
+                       + Encoding.UTF8.GetByteCount(meta.LaunchCommand);
+
+        byte[] buffer = ArrayPool<byte>.Shared.Rent(length);
+        try
+        {
+            Span<byte> data = buffer.AsSpan(0, length);
+            BinaryPrimitives.WriteUInt32LittleEndian(data, meta.AppID);
+            int32 written = sizeof(uint32);
+            written += Encoding.UTF8.GetBytes(meta.AppName, data[written..]);
+            written += Encoding.UTF8.GetBytes(meta.BuildVersion, data[written..]);
+            written += Encoding.UTF8.GetBytes(meta.LaunchExe, data[written..]);
+            written += Encoding.UTF8.GetBytes(meta.LaunchCommand, data[written..]);
+
+            Span<byte> hash = stackalloc byte[SHA1.HashSizeInBytes];
+            SHA1.HashData(data[..written], hash);
+            // UE base64 encodes, replaces '+' with '-' and '/' with '_' and removes the '=' padding: base64url
+            return Base64Url.EncodeToString(hash);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     internal static string GetChunkSubdir(EFeatureLevel featureLevel) => featureLevel switch

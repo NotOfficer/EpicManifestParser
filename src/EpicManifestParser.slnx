@@ -3,6 +3,7 @@
     <File Path=".editorconfig" />
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
   </Folder>
   <Project Path="EpicManifestParser/EpicManifestParser.csproj" />
   <Project Path="EpicManifestParser.Tests/EpicManifestParser.Tests.csproj" />

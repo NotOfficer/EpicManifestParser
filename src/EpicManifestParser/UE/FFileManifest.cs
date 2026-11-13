@@ -55,12 +55,15 @@ public sealed class FFileManifest : IComparable<FFileManifest>, IComparable
     internal FFileManifest() { }
 
     // https://github.com/NotOfficer/UnrealEngine/blob/1436d646b9b11ffe9a46b04e9617dba689b56d35/Engine/Source/Runtime/Online/BuildPatchServices/Private/Data/ManifestData.cpp?plain=1#L677C69-L677C69
+    /// <exception cref="InvalidDataException">
+    /// The section, an element count or a chunk part is invalid, or a chunk part references a chunk that is not in the chunk data list.
+    /// </exception>
     internal static FFileManifest[] ReadFileDataList(ref ManifestReader reader, FBuildPatchAppManifest manifest)
     {
-        int startPos = reader.Position;
-        int32 dataSize = reader.Read<int32>();
+        int32 end = reader.BeginSection(ManifestSection.FileManifestList, ManifestSection.ListHeaderSize, reader.Length);
         EFileManifestListVersion dataVersion = reader.Read<EFileManifestListVersion>();
         int32 elementCount = reader.Read<int32>();
+        reader.CheckCount(ManifestSection.FileManifestList, elementCount, GetMinSerializedSize(dataVersion), end);
 
         var files = new FFileManifest[elementCount];
         Span<FFileManifest> filesSpan = files.AsSpan();
@@ -90,13 +93,15 @@ public sealed class FFileManifest : IComparable<FFileManifest>, IComparable
                     continue;
                 }
 
+                reader.CheckCount(ManifestSection.FileManifestList, length, FChunkPart.SerializedSize, end);
+
                 FChunkPart[] chunkPartsArray = filesSpan[i].ChunkPartsArray = new FChunkPart[length];
                 Span<FChunkPart> chunkPartsSpan = chunkPartsArray.AsSpan();
                 long fileOffset = 0L;
 
                 for (int p = 0; p < length; p++)
                 {
-                    var chunkPart = new FChunkPart(ref reader, fileOffset, manifest.Chunks);
+                    var chunkPart = new FChunkPart(ref reader, fileOffset, manifest.Chunks, end);
                     chunkPartsSpan[p] = chunkPart;
                     fileOffset += chunkPart.Size;
                 }
@@ -142,20 +147,28 @@ public sealed class FFileManifest : IComparable<FFileManifest>, IComparable
             filesSpan.Fill(defaultFile);
         }
 
-        reader.Position = startPos + dataSize;
+        reader.EndSection(ManifestSection.FileManifestList, end);
         return files;
+    }
+
+    /// <summary>
+    /// The smallest number of bytes one file takes in a file manifest list of <paramref name="version"/>: empty strings and arrays.
+    /// </summary>
+    private static int32 GetMinSerializedSize(EFileManifestListVersion version)
+    {
+        // FileName, SymlinkTarget, SHA1Hash, FileMetaFlags, InstallTags, ChunkParts
+        int32 size = sizeof(int32) + sizeof(int32) + FSHAHash.Size + sizeof(uint8) + sizeof(int32) + sizeof(int32);
+        if (version >= EFileManifestListVersion.HasMD5AndMIMEType)
+            size += sizeof(int32) + sizeof(int32); // MD5 without hash, MIMEType
+        if (version >= EFileManifestListVersion.HasSHA256)
+            size += FSHA256Hash.Size;
+        return size;
     }
 
     /// <summary>
     /// Creates a read-only stream to read filedata from.
     /// </summary>
-    public FFileManifestStream GetStream() => new(this, Manifest.Options.CacheChunksAsIs);
-
-    /// <summary>
-    /// Creates a read-only stream to read filedata from.
-    /// </summary>
-    /// <param name="cacheAsIs">Whether or not to cache the chunks 1:1 as they were downloaded.</param>
-    public FFileManifestStream GetStream(bool cacheAsIs) => new(this, cacheAsIs);
+    public FFileManifestStream GetStream() => new(this);
 
     /// <summary>
     /// Attempts to find the chunk part that contains the specified file offset.

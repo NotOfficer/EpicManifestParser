@@ -44,7 +44,6 @@ static async Task Test1()
         ChunkBaseUrl = "https://egdownload.fastly-edge.com/Builds/Fortnite/CloudDir/",
         ChunkCacheDirectory = Directory.CreateDirectory(Path.Combine(Benchmarks.DownloadsDir, "chunks_v2")).FullName,
         ManifestCacheDirectory = Directory.CreateDirectory(Path.Combine(Benchmarks.DownloadsDir, "manifests_v2")).FullName,
-        CacheChunksAsIs = false,
         Decompressor = DecompressorBuilder.Default.Build()
     };
 
@@ -179,8 +178,8 @@ public class Benchmarks
         _filePath = Path.Combine(DownloadsDir, Path.GetFileName(fileManifest.FileName));
         _fileBuffer = new byte[fileManifest.FileSize];
         _fileMs = new MemoryStream(_fileBuffer, 0, _fileBuffer.Length, true, true);
-        _fileManifestStream1 = fileManifest.GetStream(true);
-        _fileManifestStream2 = fileManifest.GetStream(false);
+        _fileManifestStream1 = fileManifest.GetStream();
+        _fileManifestStream2 = fileManifest.GetStream();
     }
 
     [Params(
