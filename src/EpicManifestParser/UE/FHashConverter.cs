@@ -2,6 +2,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using EpicManifestParser.Json;
+
 namespace EpicManifestParser.UE;
 // ReSharper disable UseSymbolAlias
 
@@ -12,6 +14,7 @@ public sealed class FHashConverter<T> : JsonConverter<T>
     where T : struct, IFHash<T>, IEquatable<T>, ISpanFormattable, IUtf8SpanFormattable
 {
     /// <inheritdoc/>
+    /// <exception cref="JsonException">The value is not a string of <c>2 * T.Size</c> hex digits.</exception>
     public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         if (reader.TokenType != JsonTokenType.String)
@@ -19,20 +22,20 @@ public sealed class FHashConverter<T> : JsonConverter<T>
 
         Span<byte> utf8Hex = stackalloc byte[T.Size * 2];
 
-        int hexLength = reader.CopyString(utf8Hex);
-        if (hexLength != utf8Hex.Length)
+        // CopyString throws an ArgumentException for a longer value
+        if (!reader.TryCopyExactString(utf8Hex))
             throw new JsonException($"Expected {utf8Hex.Length} hex characters.");
 
         T result = default;
 
         OperationStatus status = Convert.FromHexString(
-            utf8Hex[..hexLength],
+            utf8Hex,
             result.GetSpan(),
             out int bytesConsumed,
             out int bytesWritten);
 
         if (status != OperationStatus.Done ||
-            bytesConsumed != hexLength ||
+            bytesConsumed != utf8Hex.Length ||
             bytesWritten != T.Size)
         {
             throw new JsonException("Invalid hash hex value.");

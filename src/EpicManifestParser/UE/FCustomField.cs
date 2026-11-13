@@ -16,12 +16,14 @@ public sealed class FCustomField
 
     internal FCustomField() { }
 
+    /// <exception cref="InvalidDataException">The section or its element count is invalid.</exception>
     internal static FCustomField[] ReadCustomFields(ref ManifestReader reader)
     {
-        int startPos = reader.Position;
-        int32 dataSize = reader.Read<int32>();
+        int32 end = reader.BeginSection(ManifestSection.CustomFields, ManifestSection.ListHeaderSize, reader.Length);
         EChunkDataListVersion dataVersion = reader.Read<EChunkDataListVersion>();
         int32 elementCount = reader.Read<int32>();
+        // name and value, both empty
+        reader.CheckCount(ManifestSection.CustomFields, elementCount, sizeof(int32) + sizeof(int32), end);
 
         var fields = new FCustomField[elementCount];
         Span<FCustomField> fieldsSpan = fields.AsSpan();
@@ -43,7 +45,7 @@ public sealed class FCustomField
             fieldsSpan.Fill(defaultField);
         }
 
-        reader.Position = startPos + dataSize;
+        reader.EndSection(ManifestSection.CustomFields, end);
         return fields;
     }
 }

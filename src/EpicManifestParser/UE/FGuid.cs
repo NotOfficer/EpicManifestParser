@@ -1,10 +1,15 @@
-﻿using System.Globalization;
+﻿using System.Buffers;
+using System.Buffers.Binary;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Unicode;
+
+using EpicManifestParser.Json;
 
 namespace EpicManifestParser.UE;
 
@@ -86,6 +91,43 @@ public readonly struct FGuid : IEquatable<FGuid>, ISpanFormattable, IUtf8SpanFor
     }
 
     /// <summary>
+    /// Parses 32 hex digits, without the exceptions of the constructors.
+    /// </summary>
+    internal static bool TryParse(ReadOnlySpan<char> hex, out FGuid guid)
+    {
+        Span<byte> bytes = stackalloc byte[Size];
+        if (hex.Length != Size * 2 || Convert.FromHexString(hex, bytes, out _, out int bytesWritten) != OperationStatus.Done || bytesWritten != Size)
+        {
+            guid = default;
+            return false;
+        }
+
+        guid = FromBigEndian(bytes);
+        return true;
+    }
+
+    /// <inheritdoc cref="TryParse(ReadOnlySpan{char}, out FGuid)"/>
+    internal static bool TryParse(ReadOnlySpan<byte> utf8Hex, out FGuid guid)
+    {
+        Span<byte> bytes = stackalloc byte[Size];
+        if (utf8Hex.Length != Size * 2 || Convert.FromHexString(utf8Hex, bytes, out _, out int bytesWritten) != OperationStatus.Done || bytesWritten != Size)
+        {
+            guid = default;
+            return false;
+        }
+
+        guid = FromBigEndian(bytes);
+        return true;
+    }
+
+    // each component is written as 8 hex digits, most significant first
+    private static FGuid FromBigEndian(ReadOnlySpan<byte> bytes) => new(
+        BinaryPrimitives.ReadUInt32BigEndian(bytes),
+        BinaryPrimitives.ReadUInt32BigEndian(bytes[4..]),
+        BinaryPrimitives.ReadUInt32BigEndian(bytes[8..]),
+        BinaryPrimitives.ReadUInt32BigEndian(bytes[12..]));
+
+    /// <summary>
     /// Creates a random FGuid.
     /// </summary>
     public static FGuid Random()
@@ -103,15 +145,20 @@ public readonly struct FGuid : IEquatable<FGuid>, ISpanFormattable, IUtf8SpanFor
     /// <summary>
     /// Gets the data of the guid.
     /// </summary>
+    /// <remarks>The span refers to this instance and cannot outlive it.</remarks>
+    [UnscopedRef]
     public ReadOnlySpan<byte> AsSpan() =>
         MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<uint32, byte>(ref Unsafe.AsRef(in A)), Size);
 
     /// <summary>
     /// Gets the values of the guid.
     /// </summary>
+    /// <remarks>The span refers to this instance and cannot outlive it.</remarks>
+    [UnscopedRef]
     public ReadOnlySpan<uint32> AsIntSpan() =>
         MemoryMarshal.CreateReadOnlySpan(ref Unsafe.AsRef(in A), 4);
 
+    [UnscopedRef]
     internal Span<byte> GetSpan() =>
         MemoryMarshal.CreateSpan(ref Unsafe.As<uint32, byte>(ref Unsafe.AsRef(in A)), Size);
 
@@ -174,10 +221,21 @@ public readonly struct FGuid : IEquatable<FGuid>, ISpanFormattable, IUtf8SpanFor
 public sealed class FGuidConverter : JsonConverter<FGuid>
 {
     /// <inheritdoc/>
+    /// <remarks>An empty string is the default (invalid) <see cref="FGuid"/>.</remarks>
+    /// <exception cref="JsonException">The value is not a string of 32 hex digits or an empty string.</exception>
     public override FGuid Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        if (reader.ValueSpan.IsEmpty) return default;
-        return new FGuid(reader.ValueSpan);
+        if (reader.TokenType != JsonTokenType.String)
+            throw new JsonException($"Expected a string for an {nameof(FGuid)}, got {reader.TokenType}.");
+        if (reader.HasValueSequence ? reader.ValueSequence.IsEmpty : reader.ValueSpan.IsEmpty)
+            return default;
+
+        // CopyString unescapes and handles values that span several segments, unlike ValueSpan
+        Span<byte> utf8Guid = stackalloc byte[FGuid.Size * 2];
+        if (!reader.TryCopyExactString(utf8Guid) || !FGuid.TryParse(utf8Guid, out FGuid guid))
+            throw new JsonException($"Expected an {nameof(FGuid)} of {utf8Guid.Length} hex digits.");
+
+        return guid;
     }
     
     /// <inheritdoc/>

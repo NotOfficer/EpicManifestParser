@@ -1,5 +1,4 @@
-﻿using System.Diagnostics;
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 
 namespace EpicManifestParser.UE;
 
@@ -53,30 +52,89 @@ internal sealed class FManifestHeader
     /// </summary>
     public readonly FAESAuthTag? EncryptionAuthTag;
 
+    /// <summary>
+    /// The deflate format cannot expand a byte to more than 1032 bytes (a 258 byte match in 2 bits),
+    /// so a larger uncompressed size cannot be real.
+    /// </summary>
+    private const int32 MaxZlibExpansion = 1032;
+
     // https://github.com/NotOfficer/UnrealEngine/blob/1436d646b9b11ffe9a46b04e9617dba689b56d35/Engine/Source/Runtime/Online/BuildPatchServices/Private/Data/ManifestData.cpp?plain=1#L401C61-L401C61
+    /// <param name="reader">A reader at the start of the input.</param>
+    /// <exception cref="InvalidDataException">The input is shorter than the header or the header size is invalid.</exception>
+    /// <exception cref="FileLoadException">The magic does not match.</exception>
     internal FManifestHeader(ref ManifestReader reader)
     {
+        int32 originalSize = (int32)ManifestHeaderVersionSizes[(int32)EFeatureLevel.Original];
+        if (reader.Length - reader.Position < originalSize)
+            throw new InvalidDataException($"Invalid manifest header: the input has {reader.Length - reader.Position} bytes, the header alone needs {originalSize}");
+
         uint32 magic = reader.Read<uint32>();
         if (magic != Magic)
             throw new FileLoadException($"Invalid manifest header magic: 0x{magic:X}");
 
         HeaderSize = reader.Read<int32>();
+        if (HeaderSize < originalSize || HeaderSize > reader.Length)
+            throw new InvalidDataException($"Invalid manifest header: a header size of {HeaderSize} bytes is less than {originalSize} or more than the {reader.Length} byte input");
+
         DataSizeUncompressed = reader.Read<int32>();
         DataSizeCompressed = reader.Read<int32>();
         SHAHash = reader.Read<FSHAHash>();
         StoredAs = reader.Read<EManifestStorageFlags>();
-        Version = HeaderSize > ManifestHeaderVersionSizes[(int32)EFeatureLevel.Original]
-            ? reader.Read<EFeatureLevel>()
-            : EFeatureLevel.StoredAsCompressedUClass;
+
+        if (HeaderSize > originalSize)
+        {
+            RequireHeaderSize(EFeatureLevel.StoredAsBinaryData);
+            Version = reader.Read<EFeatureLevel>();
+        }
+        else
+        {
+            Version = EFeatureLevel.StoredAsCompressedUClass;
+        }
 
         if (Version >= EFeatureLevel.ChunkEncryptionSupport)
         {
+            RequireHeaderSize(EFeatureLevel.ChunkEncryptionSupport);
             EncryptionSecretId = reader.Read<FGuid>();
             EncryptionAuthTag = reader.Read<FAESAuthTag>();
         }
 
-        Debug.Assert(reader.Position == HeaderSize);
         reader.SetPosition(HeaderSize);
+    }
+
+    private void RequireHeaderSize(EFeatureLevel featureLevel)
+    {
+        uint32 required = ManifestHeaderVersionSizes[(int32)featureLevel];
+        if ((uint32)HeaderSize < required)
+            throw new InvalidDataException($"Invalid manifest header: a header size of {HeaderSize} bytes is less than the {required} bytes of a {featureLevel} header");
+    }
+
+    /// <summary>
+    /// Checks the data sizes against the input, before anything is allocated for the data.
+    /// </summary>
+    /// <param name="dataAvailable">The number of input bytes behind the header.</param>
+    /// <param name="maxBufferSize">The largest supported buffer for the (uncompressed) data.</param>
+    /// <exception cref="InvalidDataException">
+    /// The compressed size is negative or larger than the input, or the uncompressed size is negative, larger than
+    /// <paramref name="maxBufferSize"/> or more than zlib can inflate from the compressed size.
+    /// </exception>
+    internal void CheckDataSizes(int32 dataAvailable, int32 maxBufferSize)
+    {
+        if (DataSizeCompressed < 0 || DataSizeCompressed > dataAvailable)
+            throw new InvalidDataException($"Invalid manifest header: a data size of {DataSizeCompressed} bytes is negative or more than the {dataAvailable} bytes behind the header");
+        if (DataSizeUncompressed < 0)
+            throw new InvalidDataException($"Invalid manifest header: the uncompressed data size of {DataSizeUncompressed} bytes is negative");
+
+        if (!StoredAs.HasFlag(EManifestStorageFlags.Compressed))
+        {
+            if (DataSizeCompressed > maxBufferSize)
+                throw new InvalidDataException($"Invalid manifest header: a data size of {DataSizeCompressed} bytes is more than the supported {maxBufferSize} bytes");
+            return;
+        }
+
+        if (DataSizeUncompressed > (int64)DataSizeCompressed * MaxZlibExpansion)
+            throw new InvalidDataException($"Invalid manifest header: {DataSizeUncompressed} uncompressed bytes cannot be inflated from {DataSizeCompressed} compressed bytes");
+        if (DataSizeUncompressed > maxBufferSize)
+            throw new InvalidDataException($"Invalid manifest header: an uncompressed data size of {DataSizeUncompressed} bytes is more than the supported {maxBufferSize} bytes");
     }
 
     // https://github.com/NotOfficer/UnrealEngine/blob/1436d646b9b11ffe9a46b04e9617dba689b56d35/Engine/Source/Runtime/Online/BuildPatchServices/Private/Data/ManifestData.cpp?plain=1#L27C1-L40C4

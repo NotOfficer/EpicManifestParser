@@ -1,0 +1,4 @@
+# Store text files with LF in the repository and check them out with the platform's line ending (CRLF on Windows).
+* text=auto
+
+*.png binary

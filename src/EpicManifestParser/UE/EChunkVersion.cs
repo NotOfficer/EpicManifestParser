@@ -6,6 +6,7 @@ internal enum EChunkVersion : uint32
     Original,
     StoresShaAndHashType,
     StoresDataSizeUncompressed,
+    StoresEncryptionData,
 
     // Always after the latest version, signifies the latest version plus 1 to allow initialization simplicity.
     LatestPlusOne,

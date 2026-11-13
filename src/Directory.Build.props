@@ -6,10 +6,9 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
-  <!--<PropertyGroup>
-    <PublishAot>true</PublishAot>
+  <PropertyGroup>
     <IsAotCompatible>true</IsAotCompatible>
-  </PropertyGroup>-->
+  </PropertyGroup>
 
   <PropertyGroup>
     <NeutralLanguage>en</NeutralLanguage>

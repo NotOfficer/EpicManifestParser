@@ -1,59 +1,43 @@
-﻿using System.Diagnostics;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Text.Json.Serialization;
-using System.Text.Json;
+﻿using System.Runtime.InteropServices;
 
 namespace EpicManifestParser.Json;
 
-[DebuggerDisplay("Value,nq")]
-internal readonly struct BlobString<T> where T : struct
+/// <summary>
+/// The "blob" string of JSON manifests (UE <c>FString::ToBlob</c>/<c>FromBlob</c>): three decimal digits per byte of the
+/// value's memory, in memory order.
+/// </summary>
+internal static class BlobString
 {
-    public T Value { get; }
-    public BlobString(T value) => Value = value;
-
-    public static BlobString<T>? Parse(ReadOnlySpan<byte> source)
+    /// <summary>
+    /// Parses a blob string of at most <c>sizeof(T)</c> bytes, the bytes that are not in the string stay zero (as in UE, which
+    /// also accepts an empty string). Unlike UE, which uses <c>Atoi</c>, only three digits of up to 255 are accepted per byte.
+    /// </summary>
+    /// <param name="utf8">The UTF-8 text of the string.</param>
+    /// <param name="value">The parsed value.</param>
+    /// <returns><see langword="false"/> if the string is malformed or longer than <c>3 * sizeof(T)</c>.</returns>
+    public static bool TryParse<T>(ReadOnlySpan<byte> utf8, out T value) where T : unmanaged
     {
-        if (source.Length == 0) return null;
-        T result = default;
-        ManifestData dest = MemoryMarshal.CreateSpan(ref Unsafe.As<T, byte>(ref result), Unsafe.SizeOf<T>());
+        value = default;
+        Span<byte> destination = MemoryMarshal.AsBytes(new Span<T>(ref value));
 
-        // Make sure the buffer is at least half the size and that the string is an
-        // even number of characters long
-        if (dest.Length >= (uint32)(source.Length / 3) && source.Length % 3 == 0)
+        if (utf8.Length % 3 != 0 || utf8.Length / 3 > destination.Length)
+            return false;
+
+        for (int i = 0, j = 0; i < utf8.Length; i += 3, j++)
         {
-            Span<uint8> convBuffer = stackalloc uint8[4];
-            convBuffer[3] = 0;
+            uint32 hundreds = (uint32)(utf8[i] - '0');
+            uint32 tens = (uint32)(utf8[i + 1] - '0');
+            uint32 ones = (uint32)(utf8[i + 2] - '0');
+            if (hundreds > 9 || tens > 9 || ones > 9)
+                return false;
 
-            int32 WriteIndex = 0;
-            // Walk the string 3 chars at a time
-            for (int32 Index = 0; Index < source.Length; Index += 3, WriteIndex++)
-            {
-                convBuffer[0] = source[Index];
-                convBuffer[1] = source[Index + 1];
-                convBuffer[2] = source[Index + 2];
-                dest[WriteIndex] = uint8.Parse(convBuffer);
-            }
-            return result;
+            uint32 b = hundreds * 100 + tens * 10 + ones;
+            if (b > uint8.MaxValue)
+                return false;
+
+            destination[j] = (uint8)b;
         }
-        return null;
-    }
 
-    public static implicit operator BlobString<T>(T value)
-    {
-        return new BlobString<T>(value);
+        return true;
     }
-
-    public static explicit operator T?(BlobString<T>? holder)
-    {
-        return holder?.Value;
-    }
-}
-
-internal sealed class BlobStringConverter<T> : JsonConverter<BlobString<T>?> where T : struct
-{
-    public override BlobString<T>? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => BlobString<T>.Parse(reader.ValueSpan);
-    public override void Write(Utf8JsonWriter writer, BlobString<T>? value, JsonSerializerOptions options)
-        => throw new NotSupportedException();
 }

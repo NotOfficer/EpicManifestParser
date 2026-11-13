@@ -71,10 +71,7 @@ public struct FSHAHash : IFHash<FSHAHash>, IEquatable<FSHAHash>, ISpanFormattabl
 
     /// <inheritdoc/>
     public static Task<FSHAHash> ComputeAsync(string filePath, CancellationToken cancellationToken = default)
-    {
-        using FileStream stream = File.OpenRead(filePath);
-        return ComputeAsync(stream, cancellationToken);
-    }
+        => FHashHelpers.ComputeFileHashAsync<FSHAHash>(filePath, HashAlgorithmName.SHA1, cancellationToken);
 
     /// <inheritdoc cref="IFHash{T}.ToString()"/>
     public override string ToString() => Convert.ToHexString(this);
